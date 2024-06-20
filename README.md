@@ -34,4 +34,4 @@ $ npm run coverageBsc
 ```
 
 ### Note
-Issue found by other auditor and out of scope https://docs.google.com/spreadsheets/d/18K7O1Mms9261mnS9OfDFelg4nSkwC34uUoDC3OS-GHE/edit#gid=76608452
+Issue found by other auditor and out of scope issue https://docs.google.com/spreadsheets/d/18K7O1Mms9261mnS9OfDFelg4nSkwC34uUoDC3OS-GHE/edit#gid=76608452
