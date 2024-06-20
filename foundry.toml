@@ -1,0 +1,17 @@
+[profile.default]
+src = "contracts"
+out = "out"
+libs = ["node_modules","lib"]
+test = "test/foundry"
+cache_path = 'forge-cache'
+solc = "0.8.17"
+
+# NOTE: Specifying shanghai as the evm_version seems required for the Goerli tests to pass
+evm_version = "shanghai"
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+[rpc_endpoints]
+  bsc = "https://holy-solemn-market.bsc.quiknode.pro/8d1e78947eccb345f0fc8ebb5f90c18b0d94aef4/"
+  gnosis_chain = "https://rpc.gnosischain.com"
+  localhost = "http://localhost:8545"
+  arb = "https://arbitrum-mainnet.infura.io/v3/13d58440707f4365b10cada7e86d58ed"

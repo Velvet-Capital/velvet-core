@@ -1,0 +1,2266 @@
+import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
+import { expect } from "chai";
+import "@nomicfoundation/hardhat-chai-matchers";
+import { ethers, upgrades } from "hardhat";
+import { BigNumber, Contract } from "ethers";
+import {
+  PERMIT2_ADDRESS,
+  AllowanceTransfer,
+  MaxAllowanceTransferAmount,
+  PermitBatch,
+} from "@uniswap/Permit2-sdk";
+
+import {
+  calcuateExpectedMintAmount,
+  createEnsoDataElement,
+} from "../calculations/DepositCalculations.test";
+
+import {
+  createEnsoCallData,
+  createEnsoCallDataRoute,
+} from "./IntentCalculations";
+
+import { IAddresses, priceOracle } from "./Deployments.test";
+
+import {
+  Portfolio,
+  Portfolio__factory,
+  ProtocolConfig,
+  Rebalancing__factory,
+  PortfolioFactory,
+  EnsoHandler,
+  VelvetSafeModule,
+  FeeModule,
+  UniswapV2Handler,
+  TokenExclusionManager,
+  TokenExclusionManager__factory,
+} from "../../typechain";
+
+import { chainIdToAddresses } from "../../scripts/networkVariables";
+
+var chai = require("chai");
+const axios = require("axios");
+const qs = require("qs");
+//use default BigNumber
+chai.use(require("chai-bignumber")());
+
+describe.only("Tests for Deposit + Withdrawal", () => {
+  let accounts;
+  let iaddress: IAddresses;
+  let vaultAddress: string;
+  let velvetSafeModule: VelvetSafeModule;
+  let portfolio: any;
+  let portfolio1: any;
+  let portfolioCalculations: any;
+  let portfolioCalculations1: any;
+  let tokenExclusionManager: any;
+  let tokenExclusionManager1: any;
+  let ensoHandler: EnsoHandler;
+  let portfolioContract: Portfolio;
+  let portfolioFactory: PortfolioFactory;
+  let swapHandler: UniswapV2Handler;
+  let rebalancing: any;
+  let rebalancing1: any;
+  let protocolConfig: ProtocolConfig;
+  let txObject;
+  let owner: SignerWithAddress;
+  let treasury: SignerWithAddress;
+  let assetManagerTreasury: SignerWithAddress;
+  let nonOwner: SignerWithAddress;
+  let depositor1: SignerWithAddress;
+  let addr2: SignerWithAddress;
+  let addr1: SignerWithAddress;
+  let addrs: SignerWithAddress[];
+  let feeModule0: FeeModule;
+  let approve_amount = ethers.constants.MaxUint256; //(2^256 - 1 )
+  let token;
+
+  const provider = ethers.provider;
+  const chainId: any = process.env.CHAIN_ID;
+  const addresses = chainIdToAddresses[chainId];
+
+  function delay(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+  describe.only("Tests for Deposit + Withdrawal", () => {
+    before(async () => {
+      accounts = await ethers.getSigners();
+      [
+        owner,
+        depositor1,
+        nonOwner,
+        treasury,
+        assetManagerTreasury,
+        addr1,
+        addr2,
+        ...addrs
+      ] = accounts;
+
+      const provider = ethers.getDefaultProvider();
+
+      const EnsoHandler = await ethers.getContractFactory("EnsoHandler");
+      ensoHandler = await EnsoHandler.deploy();
+      await ensoHandler.deployed();
+
+      const ProtocolConfig = await ethers.getContractFactory("ProtocolConfig");
+
+      const _protocolConfig = await upgrades.deployProxy(
+        ProtocolConfig,
+        [treasury.address, priceOracle.address],
+        { kind: "uups" },
+      );
+
+      protocolConfig = ProtocolConfig.attach(_protocolConfig.address);
+      await protocolConfig.setCoolDownPeriod("70");
+      await protocolConfig.enableSolverHandler(ensoHandler.address);
+
+      const Rebalancing = await ethers.getContractFactory("Rebalancing");
+      const rebalancingDefult = await Rebalancing.deploy();
+      await rebalancingDefult.deployed();
+
+      const TokenExclusionManager = await ethers.getContractFactory(
+        "TokenExclusionManager",
+      );
+      const tokenExclusionManagerDefault = await TokenExclusionManager.deploy();
+      await tokenExclusionManagerDefault.deployed();
+
+      const AssetManagementConfig = await ethers.getContractFactory(
+        "AssetManagementConfig",
+      );
+      const assetManagementConfig = await AssetManagementConfig.deploy();
+      await assetManagementConfig.deployed();
+
+      const Portfolio = await ethers.getContractFactory("Portfolio");
+      portfolioContract = await Portfolio.deploy();
+      await portfolioContract.deployed();
+      const PancakeSwapHandler = await ethers.getContractFactory(
+        "UniswapV2Handler",
+      );
+      swapHandler = await PancakeSwapHandler.deploy();
+      await swapHandler.deployed();
+
+      swapHandler.init(addresses.SushiSwapRouterAddress);
+
+      let whitelistedTokens = [
+        addresses.ARB,
+        addresses.WBTC,
+        addresses.WETH,
+        addresses.DAI,
+        addresses.ADoge,
+        addresses.USDCe,
+        addresses.USDT,
+        addresses.aArbUSDC,
+        addresses.aArbUSDT,
+        addresses.MAIN_LP_USDT,
+      ];
+
+      let whitelist = [owner.address];
+
+      const FeeModule = await ethers.getContractFactory("FeeModule", {});
+      const feeModule = await FeeModule.deploy();
+      await feeModule.deployed();
+
+      const VelvetSafeModule = await ethers.getContractFactory(
+        "VelvetSafeModule",
+      );
+      velvetSafeModule = await VelvetSafeModule.deploy();
+      await velvetSafeModule.deployed();
+
+      const PortfolioFactory = await ethers.getContractFactory(
+        "PortfolioFactory",
+      );
+
+      const portfolioFactoryInstance = await upgrades.deployProxy(
+        PortfolioFactory,
+        [
+          {
+            _basePortfolioAddress: portfolioContract.address,
+            _baseTokenExclusionManagerAddress:
+              tokenExclusionManagerDefault.address,
+            _baseRebalancingAddres: rebalancingDefult.address,
+            _baseAssetManagementConfigAddress: assetManagementConfig.address,
+            _feeModuleImplementationAddress: feeModule.address,
+            _baseVelvetGnosisSafeModuleAddress: velvetSafeModule.address,
+            _gnosisSingleton: addresses.gnosisSingleton,
+            _gnosisFallbackLibrary: addresses.gnosisFallbackLibrary,
+            _gnosisMultisendLibrary: addresses.gnosisMultisendLibrary,
+            _gnosisSafeProxyFactory: addresses.gnosisSafeProxyFactory,
+            _protocolConfig: protocolConfig.address,
+          },
+        ],
+        { kind: "uups" },
+      );
+
+      portfolioFactory = PortfolioFactory.attach(
+        portfolioFactoryInstance.address,
+      );
+
+      console.log("portfolioFactory address:", portfolioFactory.address);
+      const portfolioFactoryCreate =
+        await portfolioFactory.createPortfolioNonCustodial({
+          _name: "PORTFOLIOLY",
+          _symbol: "IDX",
+          _managementFee: "20",
+          _performanceFee: "2500",
+          _entryFee: "0",
+          _exitFee: "0",
+          _initialPortfolioAmount: "100000000000000000000",
+          _minPortfolioTokenHoldingAmount: "10000000000000000",
+          _assetManagerTreasury: assetManagerTreasury.address,
+          _whitelistedTokens: whitelistedTokens,
+          _public: true,
+          _transferable: true,
+          _transferableToPublic: true,
+          _whitelistTokens: true,
+        });
+
+      const portfolioFactoryCreate2 = await portfolioFactory
+        .connect(nonOwner)
+        .createPortfolioNonCustodial({
+          _name: "PORTFOLIOLY",
+          _symbol: "IDX",
+          _managementFee: "200",
+          _performanceFee: "2500",
+          _entryFee: "0",
+          _exitFee: "0",
+          _initialPortfolioAmount: "100000000000000000000",
+          _minPortfolioTokenHoldingAmount: "10000000000000000",
+          _assetManagerTreasury: assetManagerTreasury.address,
+          _whitelistedTokens: whitelistedTokens,
+          _public: true,
+          _transferable: false,
+          _transferableToPublic: false,
+          _whitelistTokens: false,
+        });
+      const portfolioAddress = await portfolioFactory.getPortfolioList(0);
+      const portfolioInfo = await portfolioFactory.PortfolioInfolList(0);
+
+      const portfolioAddress1 = await portfolioFactory.getPortfolioList(1);
+      const portfolioInfo1 = await portfolioFactory.PortfolioInfolList(1);
+
+      portfolio = await ethers.getContractAt(
+        Portfolio__factory.abi,
+        portfolioAddress,
+      );
+      const PortfolioCalculations = await ethers.getContractFactory(
+        "PortfolioCalculations",
+      );
+      feeModule0 = FeeModule.attach(await portfolio.feeModule());
+      portfolioCalculations = await PortfolioCalculations.deploy();
+      await portfolioCalculations.deployed();
+
+      portfolio1 = await ethers.getContractAt(
+        Portfolio__factory.abi,
+        portfolioAddress1,
+      );
+      portfolioCalculations1 = await PortfolioCalculations.deploy();
+      await portfolioCalculations1.deployed();
+
+      rebalancing = await ethers.getContractAt(
+        Rebalancing__factory.abi,
+        portfolioInfo.rebalancing,
+      );
+
+      rebalancing1 = await ethers.getContractAt(
+        Rebalancing__factory.abi,
+        portfolioInfo1.rebalancing,
+      );
+
+      tokenExclusionManager = await ethers.getContractAt(
+        TokenExclusionManager__factory.abi,
+        portfolioInfo.tokenExclusionManager,
+      );
+
+      tokenExclusionManager1 = await ethers.getContractAt(
+        TokenExclusionManager__factory.abi,
+        portfolioInfo1.tokenExclusionManager,
+      );
+
+      console.log("portfolio deployed to:", portfolio.address);
+
+      console.log("rebalancing:", rebalancing1.address);
+    });
+
+    describe("Deposit Tests", function () {
+      it("should retrieve the current max asset limit from the ProtocolConfig", async () => {
+        expect(await protocolConfig.assetLimit()).to.equal(15);
+      });
+
+      it("should update the max asset limit to 10 in the ProtocolConfig", async () => {
+        await protocolConfig.setAssetLimit(10);
+        expect(await protocolConfig.assetLimit()).to.equal(10);
+      });
+
+      it("should revert if not a superAdmin + nonRebalancer contract calls functions", async () => {
+        await expect(
+          portfolio.connect(addr2).initToken([addresses.ARB, addresses.WBTC]),
+        ).to.be.revertedWithCustomError(portfolio, "CallerNotSuperAdmin");
+      });
+
+      it("Calling the function mintShares should fail (only callable by contracts)", async () => {
+        await expect(
+          portfolio.mintShares(owner.address, "10000000"),
+        ).to.be.revertedWithCustomError(portfolio, "CallerNotPortfolioManager");
+      });
+
+      it("Initialize should fail if the number of tokens exceed the max limit set by the Registry (current = 10)", async () => {
+        await expect(
+          portfolio.initToken([
+            addresses.ARB,
+            addresses.WBTC,
+            addresses.WETH,
+            addresses.DAI,
+            addresses.ADoge,
+            addresses.USDCe,
+            addresses.MIM,
+            addresses.aArbDAI,
+            addresses.aArbLINK,
+            addresses.aArbUSDC,
+            addresses.aArbUSDT,
+          ]),
+        ).to.be.revertedWithCustomError(portfolio, "TokenCountOutOfLimit");
+      });
+
+      it("should init tokens", async () => {
+        await portfolio.initToken([
+          addresses.ARB,
+          addresses.WBTC,
+          addresses.USDCe,
+        ]);
+      });
+
+      it("should init 2nd portfolio tokens", async () => {
+        await portfolio1
+          .connect(nonOwner)
+          .initToken([addresses.ARB, addresses.WBTC, addresses.USDCe]);
+      });
+
+      it("deposit should fail if user has not approve permit2 contract", async () => {
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        let tokenDetails = [];
+        // swap native token to deposit token
+        let amounts = [];
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const tokens = await portfolio.getTokens();
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            owner.address,
+            tokens[i],
+            portfolio.address,
+          );
+          await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
+            value: "100000000000000000",
+          });
+          let balance = await ERC20.attach(tokens[i]).balanceOf(owner.address);
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(balance);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await owner._signTypedData(domain, types, values);
+
+        await expect(
+          portfolio.multiTokenDeposit(amounts, "0", permit, signature),
+        ).to.be.reverted;
+      });
+
+      it("owner should approve tokens to permit2 contract", async () => {
+        const tokens = await portfolio.getTokens();
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          await ERC20.attach(tokens[i]).approve(
+            PERMIT2_ADDRESS,
+            MaxAllowanceTransferAmount,
+          );
+        }
+      });
+
+      it("nonOWner should approve tokens to permit2 contract", async () => {
+        const tokens = await portfolio1.getTokens();
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          await ERC20.attach(tokens[i])
+            .connect(nonOwner)
+            .approve(PERMIT2_ADDRESS, MaxAllowanceTransferAmount);
+        }
+      });
+
+      it("should deposit multitoken into fund should fail if caller is asset manager treasury", async () => {
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        let tokenDetails = [];
+        // swap native token to deposit token
+        let amounts = [];
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const tokens = await portfolio.getTokens();
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            assetManagerTreasury.address,
+            tokens[i],
+            portfolio.address,
+          );
+          let balance = await ERC20.attach(tokens[i]).balanceOf(
+            assetManagerTreasury.address,
+          );
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(balance);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await assetManagerTreasury._signTypedData(
+          domain,
+          types,
+          values,
+        );
+
+        await expect(
+          portfolio
+            .connect(assetManagerTreasury)
+            .multiTokenDeposit(amounts, "0", permit, signature),
+        ).to.be.revertedWithCustomError(portfolio, "UserNotAllowedToDeposit");
+      });
+
+      it("should deposit multitoken into fund should fail if caller is asset velvet treasury", async () => {
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        let tokenDetails = [];
+        // swap native token to deposit token
+        let amounts = [];
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const tokens = await portfolio.getTokens();
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            treasury.address,
+            tokens[i],
+            portfolio.address,
+          );
+          await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
+            value: "100000000000000000",
+          });
+          let balance = await ERC20.attach(tokens[i]).balanceOf(owner.address);
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(balance);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await owner._signTypedData(domain, types, values);
+
+        await expect(
+          portfolio
+            .connect(treasury)
+            .multiTokenDeposit(amounts, "0", permit, signature),
+        ).to.be.revertedWithCustomError(portfolio, "UserNotAllowedToDeposit");
+      });
+
+      it("non owner should not be able to change the minPortfolioTokenHoldingAmount", async () => {
+        await expect(
+          protocolConfig
+            .connect(nonOwner)
+            .updateMinPortfolioTokenHoldingAmount("100000"),
+        ).to.be.reverted;
+      });
+
+      it("deposit multitoken into fund(First Deposit) should fail", async () => {
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        let tokenDetails = [];
+        // swap native token to deposit token
+        let amounts = [];
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const tokens = await portfolio.getTokens();
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            owner.address,
+            tokens[i],
+            portfolio.address,
+          );
+          await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
+            value: "100000000000000000",
+          });
+          let balance = await ERC20.attach(tokens[i]).balanceOf(owner.address);
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(balance);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await owner._signTypedData(domain, types, values);
+
+        await expect(
+          portfolio.multiTokenDeposit(
+            amounts,
+            "101000000000000000000",
+            permit,
+            signature,
+          ),
+        ).to.be.revertedWithCustomError(portfolio, "InvalidMintAmount");
+      });
+
+      it("deposit multitoken into fund(First Deposit) should fail if user inputs zero depositAmounts", async () => {
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        let tokenDetails = [];
+        // swap native token to deposit token
+        let amounts = [];
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const tokens = await portfolio.getTokens();
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            owner.address,
+            tokens[i],
+            portfolio.address,
+          );
+          await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
+            value: "100000000000000000",
+          });
+          let balance = await ERC20.attach(tokens[i]).balanceOf(owner.address);
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(0);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await owner._signTypedData(domain, types, values);
+
+        await expect(
+          portfolio.multiTokenDeposit(amounts, "0", permit, signature),
+        ).to.be.revertedWithCustomError(portfolio, "AmountCannotBeZero");
+      });
+
+      it("should deposit multitoken into 2nd fund(First Deposit)", async () => {
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        let tokenDetails = [];
+
+        let amounts = [];
+
+        const supplyBefore = await portfolio1.totalSupply();
+        const tokens = await portfolio1.getTokens();
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            owner.address,
+            tokens[i],
+            portfolio1.address,
+          );
+          await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
+            value: "100000000000000000",
+          });
+          let balance = await ERC20.attach(tokens[i]).balanceOf(owner.address);
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(balance);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio1.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await owner._signTypedData(domain, types, values);
+
+        await portfolio1.multiTokenDeposit(amounts, "0", permit, signature);
+
+        const supplyAfter = await portfolio1.totalSupply();
+
+        expect(Number(supplyAfter)).to.be.greaterThan(Number(supplyBefore));
+        console.log("supplyAfter", supplyAfter);
+      });
+
+      it("Deposit multitoken into 2nd fund(Second Deposit) should fail, if user inputs zero Deposit Amount", async () => {
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        let tokenDetails = [];
+
+        let amounts = [];
+
+        const supplyBefore = await portfolio1.totalSupply();
+        const tokens = await portfolio1.getTokens();
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            owner.address,
+            tokens[i],
+            portfolio1.address,
+          );
+          await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
+            value: "100000000000000000",
+          });
+          let balance = await ERC20.attach(tokens[i]).balanceOf(owner.address);
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(0);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio1.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await owner._signTypedData(domain, types, values);
+
+        await expect(
+          portfolio1.multiTokenDeposit(amounts, "0", permit, signature),
+        ).to.be.revertedWithCustomError(
+          portfolio1,
+          "MintedAmountIsNotAccepted",
+        );
+      });
+
+      it("should deposit multitoken into 2nd fund(Second Deposit)", async () => {
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        let tokenDetails = [];
+
+        let amounts = [];
+
+        const supplyBefore = await portfolio1.totalSupply();
+        const tokens = await portfolio1.getTokens();
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            owner.address,
+            tokens[i],
+            portfolio1.address,
+          );
+          await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
+            value: "100000000000000000",
+          });
+          let balance = await ERC20.attach(tokens[i]).balanceOf(owner.address);
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(balance);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio1.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await owner._signTypedData(domain, types, values);
+
+        await portfolio1.multiTokenDeposit(amounts, "0", permit, signature);
+
+        const supplyAfter = await portfolio1.totalSupply();
+
+        expect(Number(supplyAfter)).to.be.greaterThan(Number(supplyBefore));
+        console.log("supplyAfter", supplyAfter);
+      });
+
+      it("should deposit multitoken into fund(First Deposit)", async () => {
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        let tokenDetails = [];
+        // swap native token to deposit token
+        let amounts = [];
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const supplyBefore = await portfolio.totalSupply();
+
+        const tokens = await portfolio.getTokens();
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            owner.address,
+            tokens[i],
+            portfolio.address,
+          );
+          await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
+            value: "100000000000000000",
+          });
+          let balance = await ERC20.attach(tokens[i]).balanceOf(owner.address);
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(balance);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await owner._signTypedData(domain, types, values);
+
+        await portfolio.multiTokenDeposit(amounts, "0", permit, signature);
+
+        const supplyAfter = await portfolio.totalSupply();
+
+        expect(Number(supplyAfter)).to.be.greaterThan(Number(supplyBefore));
+        expect(Number(supplyAfter)).to.be.equals(
+          Number("100000000000000000000"),
+        );
+        console.log("supplyAfter", supplyAfter);
+      });
+
+      it("should deposit multitoken in behalf of another user", async () => {
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        // swap native token to deposit token
+        let amounts = [];
+
+        const supplyBefore = await portfolio.totalSupply();
+        const balanceBefore = await portfolio.balanceOf(nonOwner.address);
+
+        const tokens = await portfolio.getTokens();
+
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
+            value: "100000000000000000",
+          });
+          let balance = await ERC20.attach(tokens[i]).balanceOf(owner.address);
+          await ERC20.attach(tokens[i]).approve(portfolio.address, balance);
+          amounts.push(balance);
+        }
+
+        await portfolio.multiTokenDepositFor(nonOwner.address, amounts, "0");
+
+        const supplyAfter = await portfolio.totalSupply();
+        const balanceAfter = await portfolio.balanceOf(nonOwner.address);
+
+        expect(Number(supplyAfter)).to.be.greaterThan(Number(supplyBefore));
+
+        expect(Number(balanceAfter)).to.be.greaterThan(Number(balanceBefore));
+        console.log("supplyAfter", supplyAfter);
+      });
+
+      it("should deposit multitoken into fund (Second Deposit) should fail if entry fee is not calculated in expected token amount", async () => {
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        let tokenDetails = [];
+        // swap native token to deposit token
+        let amounts = [];
+        let newAmounts = [];
+        let leastPercentage = 0;
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const tokens = await portfolio.getTokens();
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            owner.address,
+            tokens[i],
+            portfolio.address,
+          );
+          await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
+            value: "100000000000000000",
+          });
+          let balance = await ERC20.attach(tokens[i]).balanceOf(owner.address);
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(balance);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await owner._signTypedData(domain, types, values);
+
+        // Calculation to make minimum amount value for user---------------------------------
+        let result = await portfolioCalculations.getUserAmountToDeposit(
+          amounts,
+          portfolio.address,
+        );
+        //-----------------------------------------------------------------------------------
+
+        newAmounts = result[0];
+        leastPercentage = result[1];
+
+        let inputAmounts = [];
+        for (let i = 0; i < newAmounts.length; i++) {
+          inputAmounts.push(ethers.BigNumber.from(newAmounts[i]).toString());
+        }
+
+        console.log("leastPercentage ", leastPercentage);
+        console.log("totalSupply ", await portfolio.totalSupply());
+
+        let mintAmount = await calcuateExpectedMintAmount(
+          leastPercentage,
+          await portfolio.totalSupply(),
+        );
+
+        // considering 1% slippage
+        await expect(
+          portfolio.multiTokenDeposit(
+            inputAmounts,
+            Math.abs(mintAmount).toString(),
+            permit,
+            signature,
+          ),
+        ).to.be.revertedWithCustomError(portfolio, "InvalidMintAmount");
+      });
+
+      it("should deposit multitoken into fund (Second Deposit)", async () => {
+        let amounts = [];
+        let newAmounts: any = [];
+        let leastPercentage = 0;
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        let tokenDetails = [];
+        // swap native token to deposit token
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const supplyBefore = await portfolio.totalSupply();
+
+        const tokens = await portfolio.getTokens();
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            owner.address,
+            tokens[i],
+            portfolio.address,
+          );
+          await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
+            value: "100000000000000000",
+          });
+          let balance = await ERC20.attach(tokens[i]).balanceOf(owner.address);
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(balance);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await owner._signTypedData(domain, types, values);
+
+        // Calculation to make minimum amount value for user---------------------------------
+        let result = await portfolioCalculations.getUserAmountToDeposit(
+          amounts,
+          portfolio.address,
+        );
+        //-----------------------------------------------------------------------------------
+
+        newAmounts = result[0];
+        leastPercentage = result[1];
+
+        let inputAmounts = [];
+        for (let i = 0; i < newAmounts.length; i++) {
+          inputAmounts.push(ethers.BigNumber.from(newAmounts[i]).toString());
+        }
+
+        console.log("leastPercentage ", leastPercentage);
+        console.log("totalSupply ", await portfolio.totalSupply());
+
+        let mintAmount =
+          (await calcuateExpectedMintAmount(
+            leastPercentage,
+            await portfolio.totalSupply(),
+          )) * 0.98; // 2% entry fee
+
+        // considering 1% slippage
+        await portfolio.multiTokenDeposit(
+          inputAmounts,
+          (Math.abs(mintAmount) * 0.99).toString(),
+          permit,
+          signature, // slippage 1%
+        );
+
+        const supplyAfter = await portfolio.totalSupply();
+        expect(Number(supplyAfter)).to.be.greaterThan(Number(supplyBefore));
+        console.log("supplyAfter", supplyAfter);
+      });
+
+      it("owner can change minPortfolioTokenHoldingAmount", async () => {
+        await protocolConfig.updateMinPortfolioTokenHoldingAmount(
+          "500000000000000000",
+        );
+      });
+
+      it("assetManager changes minPortfoliotokenHoldingAmount and user should be not be able to mint token less then accepted by assetManager", async () => {
+        let amounts = [];
+        let newAmounts: any = [];
+
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        const config = await portfolio.assetManagementConfig();
+        const AssetManagementConfig = await ethers.getContractFactory(
+          "AssetManagementConfig",
+        );
+        const assetManagementConfig = AssetManagementConfig.attach(config);
+        await assetManagementConfig.updateMinPortfolioTokenHoldingAmount(
+          "500000000000000000",
+        );
+
+        let tokenDetails = [];
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const tokens = await portfolio.getTokens();
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            nonOwner.address,
+            tokens[i],
+            portfolio.address,
+          );
+          await swapHandler.swapETHToTokens(
+            "500",
+            tokens[i],
+            nonOwner.address,
+            {
+              value: "100000000000000000",
+            },
+          );
+          let balance = await ERC20.attach(tokens[i]).balanceOf(
+            nonOwner.address,
+          );
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(balance);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await nonOwner._signTypedData(domain, types, values);
+
+        // Calculation to make minimum amount value for user---------------------------------
+        let result = await portfolioCalculations.getUserAmountToDeposit(
+          amounts,
+          portfolio.address,
+        );
+        //-----------------------------------------------------------------------------------
+
+        newAmounts = result[0];
+
+        let inputAmounts = [];
+        for (let i = 0; i < newAmounts.length; i++) {
+          inputAmounts.push(
+            ethers.BigNumber.from(newAmounts[i]).div(1000).toString(),
+          );
+        }
+
+        await expect(
+          portfolio
+            .connect(nonOwner)
+            .multiTokenDeposit(inputAmounts, "0", permit, signature),
+        ).to.be.revertedWithCustomError(portfolio, "MintedAmountIsNotAccepted");
+      });
+
+      it("should deposit multitoken into fund by nonOwner(Third Deposit)", async () => {
+        let amounts = [];
+        let newAmounts: any = [];
+        let tokenDetails = [];
+
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        const supplyBefore = await portfolio.totalSupply();
+        const tokens = await portfolio.getTokens();
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            nonOwner.address,
+            tokens[i],
+            portfolio.address,
+          );
+          await swapHandler.swapETHToTokens(
+            "500",
+            tokens[i],
+            nonOwner.address,
+            {
+              value: "100000000000000000",
+            },
+          );
+          let balance = await ERC20.attach(tokens[i]).balanceOf(
+            nonOwner.address,
+          );
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(balance);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await nonOwner._signTypedData(domain, types, values);
+
+        // Calculation to make minimum amount value for user---------------------------------
+        let result = await portfolioCalculations.getUserAmountToDeposit(
+          amounts,
+          portfolio.address,
+        );
+        //-----------------------------------------------------------------------------------
+
+        newAmounts = result[0];
+
+        let inputAmounts = [];
+        for (let i = 0; i < newAmounts.length; i++) {
+          inputAmounts.push(ethers.BigNumber.from(newAmounts[i]).toString());
+        }
+
+        await portfolio
+          .connect(nonOwner)
+          .multiTokenDeposit(inputAmounts, "0", permit, signature);
+
+        const supplyAfter = await portfolio.totalSupply();
+        expect(Number(supplyAfter)).to.be.greaterThan(Number(supplyBefore));
+        console.log("supplyAfter", supplyAfter);
+      });
+
+      it("should deposit multitoken into fund by nonOwner(Fourth Deposit)", async () => {
+        let amounts = [];
+        let newAmounts: any = [];
+        let tokenDetails = [];
+
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        const supplyBefore = await portfolio.totalSupply();
+        const tokens = await portfolio.getTokens();
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            nonOwner.address,
+            tokens[i],
+            portfolio.address,
+          );
+          await swapHandler.swapETHToTokens(
+            "500",
+            tokens[i],
+            nonOwner.address,
+            {
+              value: "100000000000000000",
+            },
+          );
+          let balance = await ERC20.attach(tokens[i]).balanceOf(
+            nonOwner.address,
+          );
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(balance);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await nonOwner._signTypedData(domain, types, values);
+
+        // Calculation to make minimum amount value for user---------------------------------
+        let result = await portfolioCalculations.getUserAmountToDeposit(
+          amounts,
+          portfolio.address,
+        );
+        //-----------------------------------------------------------------------------------
+
+        newAmounts = result[0];
+
+        let inputAmounts = [];
+        for (let i = 0; i < newAmounts.length; i++) {
+          inputAmounts.push(ethers.BigNumber.from(newAmounts[i]).toString());
+        }
+
+        await portfolio
+          .connect(nonOwner)
+          .multiTokenDeposit(inputAmounts, "0", permit, signature);
+
+        const supplyAfter = await portfolio.totalSupply();
+        expect(Number(supplyAfter)).to.be.greaterThan(Number(supplyBefore));
+        console.log("supplyAfter", supplyAfter);
+      });
+
+      it("asset manager teasury should greater then 0", async () => {
+        expect(
+          Number(await portfolio.balanceOf(assetManagerTreasury.address)),
+        ).to.be.greaterThan(0);
+      });
+
+      it("owner should be able to update the protocol fee", async () => {
+        await protocolConfig.updateProtocolFee("0");
+      });
+
+      it("should deposit multitoken into fund", async () => {
+        let tokenDetails = [];
+        let amounts = [];
+        // swap native token to deposit token
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        const supplyBefore = await portfolio.totalSupply();
+
+        const tokens = await portfolio.getTokens();
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            owner.address,
+            tokens[i],
+            portfolio.address,
+          );
+          await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
+            value: "100000000000000000",
+          });
+          let balance = await ERC20.attach(tokens[i]).balanceOf(owner.address);
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(balance);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await owner._signTypedData(domain, types, values);
+        await portfolio.multiTokenDeposit(amounts, "0", permit, signature);
+
+        const supplyAfter = await portfolio.totalSupply();
+
+        expect(Number(supplyAfter)).to.be.greaterThan(Number(supplyBefore));
+        console.log("supplyAfter", supplyAfter);
+      });
+
+      it("update tokens with non whitelist token should revert", async () => {
+        let tokens = await portfolio.getTokens();
+        let sellToken = tokens[0];
+        let buyToken = addresses.aArbLINK;
+
+        let newTokens = [
+          buyToken,
+          addresses.ARB,
+          addresses.WBTC,
+          addresses.USDCe,
+        ];
+
+        let vault = await portfolio.vault();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        let balance = BigNumber.from(
+          await ERC20.attach(sellToken).balanceOf(vault),
+        ).toString();
+
+        const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+          ["bytes[]", "address[]", "uint256[]"],
+          [["0x"], [buyToken], [0]],
+        );
+
+        await expect(
+          rebalancing.updateTokens({
+            _newTokens: newTokens,
+            _sellTokens: [sellToken],
+            _sellAmounts: [balance],
+            _handler: ensoHandler.address,
+            _callData: encodedParameters,
+          }),
+        ).to.be.revertedWithCustomError(portfolio, "TokenNotWhitelisted");
+      });
+
+      it("should revert is handler is not enabled", async () => {
+        let tokens = await portfolio.getTokens();
+        let sellToken = tokens[0];
+        let buyToken = addresses.aArbUSDC;
+
+        let newTokens = [
+          buyToken,
+          addresses.ARB,
+          addresses.WBTC,
+          addresses.USDCe,
+        ];
+
+        let vault = await portfolio.vault();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        let balance = BigNumber.from(
+          await ERC20.attach(sellToken).balanceOf(vault),
+        ).toString();
+
+        const data = await createEnsoDataElement(sellToken, buyToken, balance);
+
+        const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+          ["bytes[]", "address[]", "uint256[]"],
+          [["0x"], [buyToken], [0]],
+        );
+
+        await expect(
+          rebalancing.updateTokens({
+            _newTokens: newTokens,
+            _sellTokens: [sellToken],
+            _sellAmounts: [balance],
+            _handler: addresses.WBTC,
+            _callData: encodedParameters,
+          }),
+        ).to.be.revertedWithCustomError(rebalancing, "InvalidSolver");
+      });
+
+      it("should fail if protocol is paused", async () => {
+        await protocolConfig.setProtocolPause(true);
+        let tokens = await portfolio.getTokens();
+        let sellToken = tokens[0];
+        let buyToken = addresses.USDT;
+
+        let newTokens = [
+          buyToken,
+          addresses.ARB,
+          addresses.WBTC,
+          addresses.USDCe,
+        ];
+
+        let vault = await portfolio.vault();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        let balance = BigNumber.from(
+          await ERC20.attach(sellToken).balanceOf(vault),
+        ).toString();
+
+        const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+          ["bytes[]", "address[]", "uint256[]"],
+          [["0x"], [buyToken], [0]],
+        );
+
+        await expect(
+          rebalancing.updateTokens({
+            _newTokens: newTokens,
+            _sellTokens: [sellToken],
+            _sellAmounts: [balance],
+            _handler: ensoHandler.address,
+            _callData: encodedParameters,
+          }),
+        ).to.be.revertedWithCustomError(rebalancing, "ProtocolIsPaused");
+      });
+
+      it("should be able to unpause protocol", async () => {
+        await protocolConfig.setProtocolPause(false);
+      });
+
+      it("should revert if wrong buy token is passed to enso", async () => {
+        let tokens = await portfolio.getTokens();
+        let sellToken = tokens[0];
+        let buyTokenManipulated = addresses.LINK;
+        let buyToken = addresses.DAI;
+
+        let newTokens = [buyToken, tokens[1], tokens[2]];
+
+        let vault = await portfolio.vault();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        let balance = BigNumber.from(
+          await ERC20.attach(sellToken).balanceOf(vault),
+        ).toString();
+
+        const postResponse = await createEnsoCallDataRoute(
+          ensoHandler.address,
+          ensoHandler.address,
+          sellToken,
+          buyTokenManipulated,
+          balance,
+        );
+
+        const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+          ["bytes[]", "address[]", "uint256[]"],
+          [[postResponse.data.tx.data], [buyToken], [0]],
+        );
+
+        await expect(
+          rebalancing.updateTokens({
+            _newTokens: newTokens,
+            _sellTokens: [sellToken],
+            _sellAmounts: [balance],
+            _handler: ensoHandler.address,
+            _callData: encodedParameters,
+          }),
+        ).to.be.revertedWithCustomError(
+          ensoHandler,
+          "ReturnValueLessThenExpected",
+        );
+      });
+
+      it("should revert if wrong buy token is passed to enso and as buy token (not included in new token list)", async () => {
+        let tokens = await portfolio.getTokens();
+        let sellToken = tokens[0];
+        let buyTokenManipulated = addresses.LINK;
+        let buyToken = addresses.DAI;
+
+        let newTokens = [buyToken, tokens[1], tokens[2]];
+
+        let vault = await portfolio.vault();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        let balance = BigNumber.from(
+          await ERC20.attach(sellToken).balanceOf(vault),
+        ).toString();
+
+        const postResponse = await createEnsoCallDataRoute(
+          ensoHandler.address,
+          ensoHandler.address,
+          sellToken,
+          buyTokenManipulated,
+          balance,
+        );
+
+        const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+          ["bytes[]", "address[]", "uint256[]"],
+          [[postResponse.data.tx.data], [buyTokenManipulated], [0]],
+        );
+
+        await expect(
+          rebalancing.updateTokens({
+            _newTokens: newTokens,
+            _sellTokens: [sellToken],
+            _sellAmounts: [balance],
+            _handler: ensoHandler.address,
+            _callData: encodedParameters,
+          }),
+        ).to.be.revertedWithCustomError(
+          rebalancing,
+          "BalanceOfVaultCannotNotBeZero",
+        );
+      });
+
+      it("should revert if portfolio token should be sold completely but balance is not zero", async () => {
+        let tokens = await portfolio.getTokens();
+        let sellToken = tokens[0];
+        let buyToken = addresses.DAI;
+
+        let newTokens = [buyToken, tokens[1], tokens[2]];
+
+        let vault = await portfolio.vault();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+
+        let manipulatedBalance = BigNumber.from(
+          await ERC20.attach(sellToken).balanceOf(vault),
+        )
+          .div(2)
+          .toString();
+
+        const postResponse = await createEnsoCallDataRoute(
+          ensoHandler.address,
+          ensoHandler.address,
+          sellToken,
+          buyToken,
+          manipulatedBalance,
+        );
+
+        const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+          ["bytes[]", "address[]", "uint256[]"],
+          [[postResponse.data.tx.data], [buyToken], [0]],
+        );
+
+        await expect(
+          rebalancing.updateTokens({
+            _newTokens: newTokens,
+            _sellTokens: [sellToken],
+            _sellAmounts: [manipulatedBalance],
+            _handler: ensoHandler.address,
+            _callData: encodedParameters,
+          }),
+        ).to.be.revertedWithCustomError(
+          rebalancing,
+          "NonPortfolioTokenBalanceIsNotZero",
+        );
+      });
+
+      it("rebalance should revert if expected output amount length unequal tokens length", async () => {
+        await ethers.provider.send("evm_increaseTime", [1000]);
+
+        let tokens = await portfolio.getTokens();
+        let sellToken = tokens[0];
+        let buyToken = addresses.DAI;
+
+        let newTokens = [buyToken, tokens[1], tokens[2]];
+
+        let vault = await portfolio.vault();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        let balance = BigNumber.from(
+          await ERC20.attach(sellToken).balanceOf(vault),
+        ).toString();
+
+        const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+          ["bytes[]", "address[]", "uint256[]"],
+          [["0x"], [buyToken], [0, 0]],
+        );
+
+        await expect(
+          rebalancing.updateTokens({
+            _newTokens: newTokens,
+            _sellTokens: [sellToken],
+            _sellAmounts: [balance],
+            _handler: ensoHandler.address,
+            _callData: encodedParameters,
+          }),
+        ).to.be.revertedWithCustomError(ensoHandler, "InvalidLength");
+      });
+
+      it("rebalance should revert if calldata length unequal tokens length", async () => {
+        let tokens = await portfolio.getTokens();
+        let sellToken = tokens[0];
+        let buyToken = addresses.DAI;
+
+        let newTokens = [buyToken, tokens[1], tokens[2]];
+
+        let vault = await portfolio.vault();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        let balance = BigNumber.from(
+          await ERC20.attach(sellToken).balanceOf(vault),
+        ).toString();
+
+        const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+          ["bytes[]", "address[]", "uint256[]"],
+          [["0x", "0x"], [buyToken], [0]],
+        );
+
+        await expect(
+          rebalancing.updateTokens({
+            _newTokens: newTokens,
+            _sellTokens: [sellToken],
+            _sellAmounts: [balance],
+            _handler: ensoHandler.address,
+            _callData: encodedParameters,
+          }),
+        ).to.be.revertedWithCustomError(ensoHandler, "InvalidLength");
+      });
+
+      it("rebalance should revert if sellamount length unequal tokens length", async () => {
+        let tokens = await portfolio.getTokens();
+        let sellToken = tokens[0];
+        let buyToken = addresses.DAI;
+
+        let newTokens = [buyToken, tokens[1], tokens[2]];
+
+        let vault = await portfolio.vault();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        let balance = BigNumber.from(
+          await ERC20.attach(sellToken).balanceOf(vault),
+        ).toString();
+
+        const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+          ["bytes[]", "address[]", "uint256[]"],
+          [["0x"], [buyToken], [0]],
+        );
+
+        await expect(
+          rebalancing.updateTokens({
+            _newTokens: newTokens,
+            _sellTokens: [sellToken],
+            _sellAmounts: [balance, "20"],
+            _handler: ensoHandler.address,
+            _callData: encodedParameters,
+          }),
+        ).to.be.revertedWithCustomError(rebalancing, "InvalidLength");
+      });
+
+      it("should rebalance should fail if bought token is missing in new token list", async () => {
+        await ethers.provider.send("evm_increaseTime", [1000]);
+
+        let tokens = await portfolio.getTokens();
+        let sellToken = tokens[0];
+        let buyToken = addresses.DAI;
+
+        let newTokens = [tokens[1], tokens[2]];
+
+        let vault = await portfolio.vault();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        let balance = BigNumber.from(
+          await ERC20.attach(sellToken).balanceOf(vault),
+        ).toString();
+
+        const data = await createEnsoDataElement(sellToken, buyToken, balance);
+
+        const postResponse = await createEnsoCallDataRoute(
+          ensoHandler.address,
+          ensoHandler.address,
+          sellToken,
+          buyToken,
+          balance,
+        );
+
+        const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+          ["bytes[]", "address[]", "uint256[]"],
+          [[postResponse.data.tx.data], [buyToken], [0]],
+        );
+
+        await expect(
+          rebalancing.updateTokens({
+            _newTokens: newTokens,
+            _sellTokens: [sellToken],
+            _sellAmounts: [balance],
+            _handler: ensoHandler.address,
+            _callData: encodedParameters,
+          }),
+        ).to.be.revertedWithCustomError(rebalancing, "InvalidBuyTokenList");
+
+        console.log(
+          "balance after sell",
+          await ERC20.attach(sellToken).balanceOf(vault),
+        );
+      });
+
+      it("should rebalance should fail if caller is not asset manager", async () => {
+        let tokens = await portfolio.getTokens();
+        let sellToken = tokens[0];
+        let buyToken = addresses.DAI;
+
+        let newTokens = [buyToken, tokens[1], tokens[2]];
+
+        let vault = await portfolio.vault();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        let balance = BigNumber.from(
+          await ERC20.attach(sellToken).balanceOf(vault),
+        ).toString();
+
+        const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+          ["bytes[]", "address[]", "uint256[]"],
+          [["0x"], [buyToken], [0]],
+        );
+
+        await expect(
+          rebalancing.connect(nonOwner).updateTokens({
+            _newTokens: newTokens,
+            _sellTokens: [sellToken],
+            _sellAmounts: [balance],
+            _handler: ensoHandler.address,
+            _callData: encodedParameters,
+          }),
+        ).to.be.revertedWithCustomError(rebalancing, "CallerNotAssetManager");
+      });
+
+      it("should rebalance", async () => {
+        let tokens = await portfolio.getTokens();
+        let sellToken = tokens[0];
+        let buyToken = addresses.DAI;
+
+        let newTokens = [buyToken, tokens[1], tokens[2]];
+
+        let vault = await portfolio.vault();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        let balance = BigNumber.from(
+          await ERC20.attach(sellToken).balanceOf(vault),
+        ).toString();
+
+        const postResponse = await createEnsoCallDataRoute(
+          ensoHandler.address,
+          ensoHandler.address,
+          sellToken,
+          buyToken,
+          balance,
+        );
+
+        const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+          ["bytes[]", "address[]", "uint256[]"],
+          [[postResponse.data.tx.data], [buyToken], [0]],
+        );
+
+        await rebalancing.updateTokens({
+          _newTokens: newTokens,
+          _sellTokens: [sellToken],
+          _sellAmounts: [balance],
+          _handler: ensoHandler.address,
+          _callData: encodedParameters,
+        });
+
+        console.log(
+          "balance after sell",
+          await ERC20.attach(sellToken).balanceOf(vault),
+        );
+      });
+
+      it("should update weights/amounts", async () => {
+        let tokens = await portfolio.getTokens();
+        let sellToken = tokens[0];
+        let buyToken = tokens[2];
+
+        let vault = await portfolio.vault();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        let balance = BigNumber.from(
+          await ERC20.attach(sellToken).balanceOf(vault),
+        )
+          .div(2)
+          .toString();
+
+        const postResponse = await createEnsoCallDataRoute(
+          ensoHandler.address,
+          ensoHandler.address,
+          sellToken,
+          buyToken,
+          balance,
+        );
+
+        const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+          ["bytes[]", "address[]", "uint256[]"],
+          [[postResponse.data.tx.data], [buyToken], [0]],
+        );
+
+        let balanceBefore = await ERC20.attach(buyToken).balanceOf(vault);
+
+        await rebalancing.updateWeights(
+          [sellToken],
+          [balance],
+          ensoHandler.address,
+          encodedParameters,
+        );
+
+        let balanceAfter = await ERC20.attach(buyToken).balanceOf(vault);
+        expect(balanceAfter).to.be.greaterThan(balanceBefore);
+      });
+
+      it("assetmanager should remove disbale token", async () => {
+        await rebalancing.removePortfolioToken(addresses.WBTC);
+      });
+
+      it("user1(owner) should be able to claim their removed tokens", async () => {
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        const tokenToRemove = addresses.WBTC;
+
+        let tokenBalanceBefore = await ERC20.attach(tokenToRemove).balanceOf(
+          owner.address,
+        );
+
+        let userShare = (
+          await tokenExclusionManager.userRecord(owner.address, 1)
+        ).portfolioBalance;
+        let totalSupply = await tokenExclusionManager.totalSupplyRecord(1);
+
+        let userIdxShareRatio = BigNumber.from(userShare)
+          .mul(100)
+          .div(BigNumber.from(totalSupply));
+
+        await tokenExclusionManager.claimRemovedTokens(owner.address);
+
+        let tokenBalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
+          owner.address,
+        );
+
+        let removedTokenBalance = (await tokenExclusionManager.removedToken(1))
+          .balanceAtRemoval;
+
+        let userRemovedTokenRatio = BigNumber.from(tokenBalanceAfter)
+          .sub(BigNumber.from(tokenBalanceBefore))
+          .mul(100)
+          .div(BigNumber.from(removedTokenBalance));
+
+        let balanceDiff = BigNumber.from(tokenBalanceAfter).sub(
+          BigNumber.from(tokenBalanceBefore),
+        );
+
+        expect(tokenBalanceAfter).to.be.greaterThan(tokenBalanceBefore);
+        expect(userRemovedTokenRatio).to.be.equals(userIdxShareRatio);
+      });
+
+      it("if user1 again try to claim same token twice, he will not receive any tokens", async () => {
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        const tokenToRemove = addresses.WBTC;
+
+        let tokenBalanceBefore = await ERC20.attach(tokenToRemove).balanceOf(
+          owner.address,
+        );
+
+        await tokenExclusionManager.claimRemovedTokens(owner.address);
+
+        let tokenBalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
+          owner.address,
+        );
+
+        expect(tokenBalanceAfter).to.be.equals(tokenBalanceBefore);
+      });
+
+      it("should withdraw in multitoken by nonwOwner(user2)", async () => {
+        await ethers.provider.send("evm_increaseTime", [70]);
+
+        const supplyBefore = await portfolio.totalSupply();
+        const amountPortfolioToken = await portfolio.balanceOf(
+          nonOwner.address,
+        );
+
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        const tokens = await portfolio.getTokens();
+
+        let tokenBalanceBefore: any = [];
+        for (let i = 0; i < tokens.length; i++) {
+          tokenBalanceBefore[i] = await ERC20.attach(tokens[i]).balanceOf(
+            nonOwner.address,
+          );
+        }
+
+        await portfolio
+          .connect(nonOwner)
+          .multiTokenWithdrawal(BigNumber.from(amountPortfolioToken));
+
+        const supplyAfter = await portfolio.totalSupply();
+
+        for (let i = 0; i < tokens.length; i++) {
+          let tokenBalanceAfter = await ERC20.attach(tokens[i]).balanceOf(
+            nonOwner.address,
+          );
+          expect(Number(tokenBalanceAfter)).to.be.greaterThan(
+            Number(tokenBalanceBefore[i]),
+          );
+        }
+        expect(Number(supplyBefore)).to.be.greaterThan(Number(supplyAfter));
+      });
+
+      it("user2(nonOwner) should claim removed tokens after complete withdrawal from portfolio", async () => {
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        const tokenToRemove = addresses.WBTC;
+
+        let tokenBalanceBefore: any = await ERC20.attach(
+          tokenToRemove,
+        ).balanceOf(nonOwner.address);
+
+        let userShare = (
+          await tokenExclusionManager.userRecord(nonOwner.address, 1)
+        ).portfolioBalance;
+        let totalSupply = await tokenExclusionManager.totalSupplyRecord(1);
+
+        let userIdxShareRatio = BigNumber.from(userShare)
+          .mul(100)
+          .div(BigNumber.from(totalSupply));
+
+        await tokenExclusionManager.claimRemovedTokens(nonOwner.address);
+
+        let tokenBalanceAfter: any = await ERC20.attach(
+          tokenToRemove,
+        ).balanceOf(nonOwner.address);
+
+        let removedTokenBalance = (await tokenExclusionManager.removedToken(1))
+          .balanceAtRemoval;
+
+        let userRemovedTokenRatio = BigNumber.from(tokenBalanceAfter)
+          .sub(BigNumber.from(tokenBalanceBefore))
+          .mul(100)
+          .div(BigNumber.from(removedTokenBalance));
+
+        expect(tokenBalanceAfter).to.be.greaterThan(tokenBalanceBefore);
+        expect(userRemovedTokenRatio).to.be.equals(userIdxShareRatio);
+      });
+
+      it("should fail if random user not eligible trying to claim tokens, should not get any token", async () => {
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        const tokenToRemove = addresses.WBTC;
+
+        let tokenBalanceBefore = await ERC20.attach(tokenToRemove).balanceOf(
+          owner.address,
+        );
+
+        await tokenExclusionManager.claimRemovedTokens(addr1.address);
+
+        let tokenBalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
+          owner.address,
+        );
+
+        expect(tokenBalanceAfter).to.be.equals(tokenBalanceBefore);
+      });
+
+      it("non asset manager should not be able to remove a token partially", async () => {
+        let tokens = await portfolio.getTokens();
+        const tokenToRemove = tokens[0];
+
+        await expect(
+          rebalancing
+            .connect(addr2)
+            .removePortfolioTokenPartially(tokenToRemove, "10000"),
+        ).to.be.revertedWithCustomError(rebalancing, "CallerNotAssetManager");
+      });
+
+      it("should fail to remove 100% of the token calling the function to remove a token partially", async () => {
+        let tokens = await portfolio.getTokens();
+        const tokenToRemove = tokens[0];
+
+        await expect(
+          rebalancing.removePortfolioTokenPartially(tokenToRemove, "10000"),
+        ).to.be.revertedWithCustomError(
+          rebalancing,
+          "InvalidTokenRemovalPercentage",
+        );
+      });
+
+      it("assetManager should remove token partially", async () => {
+        let tokens = await portfolio.getTokens();
+        let vault = await portfolio.vault();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        const tokenToRemove = tokens[0];
+
+        let vaultBalanceBefore = await ERC20.attach(tokenToRemove).balanceOf(
+          vault,
+        );
+        let tokenExclusionManagerBalanceBefore = await ERC20.attach(
+          tokenToRemove,
+        ).balanceOf(tokenExclusionManager.address);
+
+        await rebalancing.removePortfolioTokenPartially(tokenToRemove, "5000");
+
+        let vaultBalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
+          vault,
+        );
+        let tokenExclusionManagerBalanceAfter = await ERC20.attach(
+          tokenToRemove,
+        ).balanceOf(tokenExclusionManager.address);
+
+        expect(vaultBalanceBefore).to.be.greaterThan(vaultBalanceAfter);
+        expect(tokenExclusionManagerBalanceAfter).to.be.greaterThan(
+          tokenExclusionManagerBalanceBefore,
+        );
+
+        expect(
+          tokenExclusionManagerBalanceAfter.add(vaultBalanceAfter),
+        ).to.be.equal(vaultBalanceBefore);
+      });
+
+      it("user1 (owner) should be able to claim the partially removed token", async () => {
+        let tokens = await portfolio.getTokens();
+
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        const tokenToRemove = tokens[0];
+
+        let token1BalanceBefore = await ERC20.attach(tokenToRemove).balanceOf(
+          owner.address,
+        );
+
+        let userShare = (
+          await tokenExclusionManager.userRecord(owner.address, 2)
+        ).portfolioBalance;
+
+        let totalSupply = await tokenExclusionManager.totalSupplyRecord(2);
+
+        let userIdxShareRatio1 = BigNumber.from(userShare)
+          .mul(100)
+          .div(BigNumber.from(totalSupply));
+
+        let tokenExclusionManagerBalanceBefore = await ERC20.attach(
+          tokenToRemove,
+        ).balanceOf(tokenExclusionManager.address);
+
+        await tokenExclusionManager.claimRemovedTokens(owner.address);
+
+        let tokenExclusionManagerBalanceAfter = await ERC20.attach(
+          tokenToRemove,
+        ).balanceOf(tokenExclusionManager.address);
+
+        let token1BalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
+          owner.address,
+        );
+
+        let removedTokenBalance = (await tokenExclusionManager.removedToken(2))
+          .balanceAtRemoval;
+
+        let userRemovedToken1Ratio = BigNumber.from(token1BalanceAfter)
+          .sub(BigNumber.from(token1BalanceBefore))
+          .mul(100)
+          .div(BigNumber.from(removedTokenBalance));
+
+        expect(token1BalanceAfter).to.be.greaterThan(token1BalanceBefore);
+        expect(userRemovedToken1Ratio).to.be.equals(userIdxShareRatio1);
+        expect(token1BalanceAfter.sub(token1BalanceBefore)).to.be.equal(
+          tokenExclusionManagerBalanceBefore.sub(
+            tokenExclusionManagerBalanceAfter,
+          ),
+        );
+      });
+
+      it("assetManager should create 2 snapshot(remove 2 tokens) simultaneously for 2nd Portfolio Fund", async () => {
+        await rebalancing1
+          .connect(nonOwner)
+          .removePortfolioToken(addresses.WBTC);
+        await rebalancing1
+          .connect(nonOwner)
+          .removePortfolioToken(addresses.ARB);
+      });
+
+      it("user1(owner) should be able to claim both of his removed tokens", async () => {
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        const token1ToRemove = addresses.WBTC;
+        const token2ToRemove = addresses.ARB;
+
+        let token1BalanceBefore = await ERC20.attach(token1ToRemove).balanceOf(
+          owner.address,
+        );
+
+        let token2BalanceBefore = await ERC20.attach(token2ToRemove).balanceOf(
+          owner.address,
+        );
+
+        let userShare1 = (
+          await tokenExclusionManager1.userRecord(owner.address, 1)
+        ).portfolioBalance;
+
+        //As userShare2 is not recorded we will use userShare1 for verification
+        let userShare2 = userShare1;
+
+        let totalSupply1 = await tokenExclusionManager1.totalSupplyRecord(1);
+
+        let totalSupply2 = await tokenExclusionManager1.totalSupplyRecord(2);
+
+        let userIdxShareRatio1 = BigNumber.from(userShare1)
+          .mul(100)
+          .div(BigNumber.from(totalSupply1));
+
+        let userIdxShareRatio2 = BigNumber.from(userShare2)
+          .mul(100)
+          .div(BigNumber.from(totalSupply2));
+
+        await tokenExclusionManager1.claimRemovedTokens(owner.address);
+
+        let token1BalanceAfter = await ERC20.attach(token1ToRemove).balanceOf(
+          owner.address,
+        );
+
+        let token2BalanceAfter = await ERC20.attach(token2ToRemove).balanceOf(
+          owner.address,
+        );
+
+        let removedToken1Balance = (
+          await tokenExclusionManager1.removedToken(1)
+        ).balanceAtRemoval;
+
+        let removedToken2Balance = (
+          await tokenExclusionManager1.removedToken(2)
+        ).balanceAtRemoval;
+
+        let userRemovedToken1Ratio = BigNumber.from(token1BalanceAfter)
+          .sub(BigNumber.from(token1BalanceBefore))
+          .mul(100)
+          .div(BigNumber.from(removedToken1Balance));
+
+        let userRemovedToken2Ratio = BigNumber.from(token2BalanceAfter)
+          .sub(BigNumber.from(token2BalanceBefore))
+          .mul(100)
+          .div(BigNumber.from(removedToken2Balance));
+
+        expect(token1BalanceAfter).to.be.greaterThan(token1BalanceBefore);
+        expect(token2BalanceAfter).to.be.greaterThan(token2BalanceBefore);
+
+        expect(userRemovedToken1Ratio).to.be.equals(userIdxShareRatio1);
+        expect(userRemovedToken2Ratio).to.be.equals(userIdxShareRatio2);
+      });
+
+      it("only portfolio manager can set userRecord that is portfolio contract and rebalancing contract", async () => {
+        await expect(
+          tokenExclusionManager1.setUserRecord(owner.address, "10000"),
+        ).to.be.reverted;
+      });
+
+      it("user1(owner) should not get any token if he claims removed token", async () => {
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        const tokenToRemove = addresses.WBTC;
+
+        let tokenBalanceBefore = await ERC20.attach(tokenToRemove).balanceOf(
+          owner.address,
+        );
+
+        await tokenExclusionManager1.claimRemovedTokens(owner.address);
+
+        let tokenBalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
+          owner.address,
+        );
+
+        expect(tokenBalanceAfter).to.be.equals(tokenBalanceBefore);
+      });
+    });
+  });
+});
