@@ -107,6 +107,8 @@ library ErrorLibrary {
   error BalanceOfVaultCannotNotBeZero(address);
   /// @notice Throws when balance of selltoken in handler after swap is not zero
   error BalanceOfHandlerShouldBeZero();
+  /// @notice Throws when balance of selltoken in handler after swap is exceeding dust
+  error BalanceOfHandlerShouldNotExceedDust();
   /// @notice Throws when swap return value in handler is less then min buy amounts
   error ReturnValueLessThenExpected();
   /// @notice Throws when non portfolio token balance in not zero after rebalance
@@ -157,4 +159,22 @@ library ErrorLibrary {
   error InvalidCooldownPeriod();
   // @notice Thrown when the division by zero occurs
   error DivisionByZero();
+  // @notice Thrown when the token whitelist length is zero
+  error InvalidTokenWhitelistLength();
+  // @notice Thrown when the reward target is not enabled
+  error RewardTargetNotEnabled();
+  // @notice Thrown when the allowance is insufficient
+  error InsufficientAllowance();
+  // @notice Thrown when user tries to claim for invalid Id
+  error InvalidId();
+  // @notice Thrown when exemption does match token to withdraw
+  error InvalidExemptionTokens();
+  // @notice Thrown when exemption tokens length is greater then portfolio tokens length
+  error InvalidExemptionTokensLength();
+  // @notice Thrown when the dust tolerance input is invalid
+  error InvalidDustTolerance();
+  // @notice Thrown when the target address is not whitelisted
+  error InvalidTargetAddress();
+  // @notice Thrown when the ETH balance sent is zero
+  error InvalidBalance();
 }

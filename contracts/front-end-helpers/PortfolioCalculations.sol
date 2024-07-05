@@ -3,16 +3,101 @@
 pragma solidity 0.8.17;
 
 import {IPortfolio} from "../core/interfaces/IPortfolio.sol";
+import {ITokenExclusionManager} from "../core/interfaces/ITokenExclusionManager.sol";
 import {IFeeModule} from "../fee/IFeeModule.sol";
 import {IAssetManagementConfig} from "../config/assetManagement/IAssetManagementConfig.sol";
 import {IProtocolConfig} from "../config/protocol/IProtocolConfig.sol";
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import {IERC20MetadataUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
+import {IPriceOracle} from "../../contracts/oracle/IPriceOracle.sol";
 
 import {ErrorLibrary} from "../library/ErrorLibrary.sol";
 
 contract PortfolioCalculations {
   uint256 internal constant ONE_ETH_IN_WEI = 10 ** 18;
   uint256 constant MIN_MINT_FEE = 1_000_000;
+  uint256 public constant TOTAL_WEIGHT = 10_000;
+
+  function getTokenBalancesAndDecimals(
+    address _portfolio
+  ) public view returns (uint256[] memory, uint8[] memory) {
+    require(_portfolio != address(0), "Invalid portfolio address");
+
+    IPortfolio portfolio = IPortfolio(_portfolio);
+    address vault = portfolio.vault();
+    address[] memory tokens = portfolio.getTokens();
+    uint256[] memory tokenBalances = new uint256[](tokens.length);
+    uint8[] memory tokenDecimals = new uint8[](tokens.length);
+    if (portfolio.totalSupply() > 0) {
+      for (uint256 i = 0; i < tokens.length; i++) {
+        tokenBalances[i] = IERC20Upgradeable(tokens[i]).balanceOf(vault);
+        tokenDecimals[i] = IERC20MetadataUpgradeable(tokens[i]).decimals();
+      }
+      return (tokenBalances, tokenDecimals);
+    } else {
+      return (new uint256[](0), new uint8[](0));
+    }
+  }
+
+  function getPortfolioData(
+    address _portfolio
+  )
+    public
+    view
+    returns (
+      uint256[] memory tokenAmountArray,
+      uint8[] memory tokenDecimalArray,
+      address[] memory indexTokens,
+      uint256 totalSupply
+    )
+  {
+    require(_portfolio != address(0), "Invalid portfolio address");
+
+    IPortfolio portfolio = IPortfolio(_portfolio);
+
+    (tokenAmountArray, tokenDecimalArray) = getTokenBalancesAndDecimals(
+      _portfolio
+    );
+    indexTokens = portfolio.getTokens();
+    totalSupply = portfolio.totalSupply();
+  }
+
+  function getPortfolioDataByte(
+    address _portfolio
+  ) external view returns (bytes memory) {
+    require(_portfolio != address(0), "Invalid portfolio address");
+
+    (
+      uint256[] memory tokenAmountArray,
+      uint8[] memory tokenDecimalArray,
+      address[] memory indexTokens,
+      uint256 totalSupply
+    ) = getPortfolioData(_portfolio);
+
+    return
+      abi.encode(tokenAmountArray, tokenDecimalArray, indexTokens, totalSupply);
+  }
+
+  function getExpectedMintAmount(
+    address _portfolio,
+    uint256 _userShare
+  ) external view returns (uint256) {
+    require(_portfolio != address(0), "Invalid portfolio address");
+    require(_userShare > 0 && _userShare < 10_000, "Invalid user share");
+
+    IPortfolio portfolio = IPortfolio(_portfolio);
+
+    uint256 totalSupply = portfolio.totalSupply();
+    IFeeModule _feeModule = IFeeModule(portfolio.feeModule());
+    uint256 expectedMintAmount = (_userShare * totalSupply) / (1 - _userShare);
+
+    uint256 entryFee = _feeModule.entryFee();
+    if (entryFee > 0) {
+      expectedMintAmount = (expectedMintAmount * (1e4 - entryFee)) / 1e4;
+    }
+
+    return expectedMintAmount;
+  }
 
   /**
    * @dev This function takes value of portfolio token amounts from user as input and returns the lowest amount possible to deposit to get the exact ratio of token amounts
@@ -254,6 +339,119 @@ contract PortfolioCalculations {
     return totalSupply;
   }
 
+  //Get Protocol And Management Fee
+  function getProtocolAndManagementFee(
+    address _portfolio
+  )
+    public
+    view
+    returns (uint256 assetManagerFeeToMint, uint256 protocolFeeToMint)
+  {
+    IPortfolio portfolio = IPortfolio(_portfolio);
+    IFeeModule _feeModule = IFeeModule(portfolio.feeModule());
+
+    IAssetManagementConfig _assetManagementConfig = IAssetManagementConfig(
+      portfolio.assetManagementConfig()
+    );
+
+    IProtocolConfig _protocolConfig = IProtocolConfig(
+      portfolio.protocolConfig()
+    );
+
+    uint256 totalSupplyPortfolio = portfolio.totalSupply();
+
+    (assetManagerFeeToMint, protocolFeeToMint) = _getFeeAmount(
+      _assetManagementConfig,
+      _protocolConfig,
+      _feeModule,
+      totalSupplyPortfolio
+    );
+
+    if (assetManagerFeeToMint < MIN_MINT_FEE) {
+      assetManagerFeeToMint = 0;
+    }
+    if (protocolFeeToMint < MIN_MINT_FEE) {
+      protocolFeeToMint = 0;
+    }
+  }
+
+  //Get Performance Fee
+  function getPerformanceFee(
+    address _portfolio
+  ) public view returns (uint256 protocolFee, uint256 assetManagerFee) {
+    IPortfolio portfolio = IPortfolio(_portfolio);
+
+    IProtocolConfig _protocolConfig = IProtocolConfig(
+      portfolio.protocolConfig()
+    );
+
+    uint256 totalSupply = portfolio.totalSupply();
+
+    IFeeModule _feeModule = IFeeModule(portfolio.feeModule());
+
+    IAssetManagementConfig _assetManagementConfig = IAssetManagementConfig(
+      portfolio.assetManagementConfig()
+    );
+
+    uint256 vaultBalance = portfolio.getVaultValueInUSD(
+      IPriceOracle(_protocolConfig.oracle()),
+      portfolio.getTokens(),
+      totalSupply,
+      portfolio.vault()
+    );
+    uint256 currentPrice = _getCurrentPrice(vaultBalance, totalSupply);
+
+    uint256 performanceFee = _calculatePerformanceFeeToMint(
+      currentPrice,
+      _feeModule.highWatermark(),
+      totalSupply,
+      vaultBalance,
+      _assetManagementConfig.performanceFee()
+    );
+
+    (protocolFee, assetManagerFee) = _splitFee(
+      performanceFee,
+      _protocolConfig.protocolFee()
+    );
+
+    if (protocolFee < MIN_MINT_FEE) {
+      protocolFee = 0;
+    }
+    if (assetManagerFee < MIN_MINT_FEE) {
+      assetManagerFee = 0;
+    }
+  }
+
+  function _getCurrentPrice(
+    uint256 _vaultBalance,
+    uint256 _totalSupply
+  ) internal pure returns (uint256 currentPrice) {
+    currentPrice = _totalSupply == 0
+      ? 0
+      : (_vaultBalance * ONE_ETH_IN_WEI) / _totalSupply;
+  }
+
+  function _calculatePerformanceFeeToMint(
+    uint256 _currentPrice,
+    uint256 _highWaterMark,
+    uint256 _totalSupply,
+    uint256 _vaultBalance,
+    uint256 _feePercentage
+  ) internal pure returns (uint256 tokensToMint) {
+    if (_currentPrice <= _highWaterMark) {
+      return 0; // No fee if current price is below or equal to high watermark
+    }
+
+    uint256 performanceIncrease = _currentPrice - _highWaterMark;
+    uint256 performanceFee = ((performanceIncrease *
+      _totalSupply *
+      _feePercentage) * ONE_ETH_IN_WEI) / TOTAL_WEIGHT;
+
+    tokensToMint =
+      (performanceFee * _totalSupply) /
+      (_vaultBalance - performanceFee);
+  }
+
   function _getFeeAmount(
     IAssetManagementConfig _assetManagementConfig,
     IProtocolConfig _protocolConfig,
@@ -280,5 +478,52 @@ contract PortfolioCalculations {
       _feeModule.lastChargedProtocolFee(),
       block.timestamp
     );
+  }
+
+  function getUserTokenClaimBalance(
+    address _portfolio,
+    address user,
+    uint256 startId,
+    uint256 endId
+  ) external view returns (uint256[] memory) {
+    IPortfolio portfolio = IPortfolio(_portfolio);
+    ITokenExclusionManager tokenExclusionManager = ITokenExclusionManager(
+      portfolio.tokenExclusionManager()
+    );
+
+    uint256 _currentId = tokenExclusionManager._currentSnapshotId();
+
+    // If there are less than two snapshots, no tokens have been removed
+    if (_currentId < 2) revert ErrorLibrary.NoTokensRemoved();
+
+    if (startId > endId || endId >= _currentId) revert ErrorLibrary.InvalidId();
+
+    //Adding 1 to endId, to run loop till endId
+    uint256 _lastId = endId + 1;
+
+    uint256[] memory claimBalances = new uint256[](_lastId - startId);
+    uint256 i = 0;
+
+    for (uint256 id = startId; id < _lastId; id++) {
+      (bool isValid, uint256 balance) = tokenExclusionManager.getDataAtId(
+        user,
+        id
+      );
+      if (isValid && balance > 0) {
+        (
+          address token,
+          address vault,
+          uint256 _totalSupply
+        ) = tokenExclusionManager.removedToken(id);
+        // Calculate the user's share of the removed token
+        uint256 currentVaultBalance = IERC20Upgradeable(token).balanceOf(vault);
+        uint256 _balance = (currentVaultBalance * balance) / _totalSupply;
+        claimBalances[i] = _balance;
+      } else {
+        claimBalances[i] = 0;
+      }
+      i++;
+    }
+    return claimBalances;
   }
 }

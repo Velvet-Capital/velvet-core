@@ -38,7 +38,9 @@ import {
   AccessController__factory,
   TokenExclusionManager__factory,
   DepositBatch,
+  DepositManager,
   WithdrawBatch,
+  WithdrawManager,
 } from "../../typechain";
 
 import { chainIdToAddresses } from "../../scripts/networkVariables";
@@ -61,13 +63,16 @@ describe.only("Tests for Deposit", () => {
   let tokenExclusionManager1: any;
   let ensoHandler: EnsoHandler;
   let depositBatch: DepositBatch;
+  let depositManager: DepositManager;
   let withdrawBatch: WithdrawBatch;
+  let withdrawManager: WithdrawManager;
   let portfolioContract: Portfolio;
   let portfolioFactory: PortfolioFactory;
   let swapHandler: UniswapV2Handler;
   let rebalancing: any;
   let rebalancing1: any;
   let protocolConfig: ProtocolConfig;
+  let fakePortfolio: Portfolio;
   let txObject;
   let owner: SignerWithAddress;
   let treasury: SignerWithAddress;
@@ -115,9 +120,19 @@ describe.only("Tests for Deposit", () => {
       depositBatch = await DepositBatch.deploy();
       await depositBatch.deployed();
 
+      const DepositManager = await ethers.getContractFactory("DepositManager");
+      depositManager = await DepositManager.deploy(depositBatch.address);
+      await depositManager.deployed();
+
       const WithdrawBatch = await ethers.getContractFactory("WithdrawBatch");
       withdrawBatch = await WithdrawBatch.deploy();
       await withdrawBatch.deployed();
+
+      const WithdrawManager = await ethers.getContractFactory(
+        "WithdrawManager",
+      );
+      withdrawManager = await WithdrawManager.deploy();
+      await withdrawManager.deployed();
 
       const ProtocolConfig = await ethers.getContractFactory("ProtocolConfig");
 
@@ -179,6 +194,15 @@ describe.only("Tests for Deposit", () => {
       const feeModule = await FeeModule.deploy();
       await feeModule.deployed();
 
+      const TokenRemovalVault = await ethers.getContractFactory(
+        "TokenRemovalVault",
+      );
+      const tokenRemovalVault = await TokenRemovalVault.deploy();
+      await tokenRemovalVault.deployed();
+
+      fakePortfolio = await Portfolio.deploy();
+      await fakePortfolio.deployed();
+
       const VelvetSafeModule = await ethers.getContractFactory(
         "VelvetSafeModule",
       );
@@ -199,6 +223,7 @@ describe.only("Tests for Deposit", () => {
             _baseRebalancingAddres: rebalancingDefult.address,
             _baseAssetManagementConfigAddress: assetManagementConfig.address,
             _feeModuleImplementationAddress: feeModule.address,
+            _baseTokenRemovalVaultImplementation: tokenRemovalVault.address,
             _baseVelvetGnosisSafeModuleAddress: velvetSafeModule.address,
             _gnosisSingleton: addresses.gnosisSingleton,
             _gnosisFallbackLibrary: addresses.gnosisFallbackLibrary,
@@ -212,6 +237,11 @@ describe.only("Tests for Deposit", () => {
 
       portfolioFactory = PortfolioFactory.attach(
         portfolioFactoryInstance.address,
+      );
+
+      await withdrawManager.initialize(
+        withdrawBatch.address,
+        portfolioFactory.address,
       );
 
       console.log("portfolioFactory address:", portfolioFactory.address);
@@ -328,7 +358,7 @@ describe.only("Tests for Deposit", () => {
           postResponse.push(response.data.tx.data);
         }
 
-        const data = await depositBatch.multiTokenSwapAndTransfer(
+        const data = await depositBatch.multiTokenSwapETHAndTransfer(
           {
             _minMintAmount: 0,
             _depositAmount: "1000000000000000000",
@@ -383,11 +413,11 @@ describe.only("Tests for Deposit", () => {
         //----------Approval-------------
 
         await ERC20.attach(tokenToSwap).approve(
-          depositBatch.address,
+          depositManager.address,
           amountToSwap.toString(),
         );
 
-        const data = await depositBatch.multiTokenSwapAndTransfer({
+        const data = await depositManager.deposit({
           _minMintAmount: 0,
           _depositAmount: amountToSwap.toString(),
           _target: portfolio.address,
@@ -436,11 +466,11 @@ describe.only("Tests for Deposit", () => {
         //----------Approval-------------
 
         await ERC20.attach(tokenToSwap).approve(
-          depositBatch.address,
+          depositManager.address,
           amountToSwap.toString(),
         );
 
-        const data = await depositBatch.multiTokenSwapAndTransfer({
+        const data = await depositManager.deposit({
           _minMintAmount: 0,
           _depositAmount: amountToSwap.toString(),
           _target: portfolio.address,
@@ -474,7 +504,7 @@ describe.only("Tests for Deposit", () => {
           );
 
         await portfolio.approve(
-          withdrawBatch.address,
+          withdrawManager.address,
           BigNumber.from(amountPortfolioToken),
         );
 
@@ -497,7 +527,7 @@ describe.only("Tests for Deposit", () => {
         }
 
         await expect(
-          withdrawBatch.multiTokenSwapAndWithdraw(
+          withdrawManager.withdraw(
             portfolio.address,
             tokenToSwapInto,
             amountPortfolioToken,
@@ -528,7 +558,7 @@ describe.only("Tests for Deposit", () => {
           );
 
         await portfolio.approve(
-          withdrawBatch.address,
+          withdrawManager.address,
           BigNumber.from(amountPortfolioToken),
         );
 
@@ -551,13 +581,33 @@ describe.only("Tests for Deposit", () => {
         }
 
         await expect(
-          withdrawBatch.multiTokenSwapAndWithdraw(
+          withdrawManager.withdraw(
             portfolio.address,
             tokenToSwapInto,
             amountPortfolioToken,
             responses,
           ),
         ).to.be.revertedWithCustomError(withdrawBatch, "InvalidBalanceDiff");
+      });
+
+      it("withdrawal should fail if target address is not whitelisted", async () => {
+        const user = owner;
+        const amountPortfolioToken = BigNumber.from(
+          await portfolio.balanceOf(user.address),
+        ).div(2);
+        const tokenToSwapInto = addresses.WBTC;
+
+        await expect(
+          withdrawManager.withdraw(
+            fakePortfolio.address,
+            tokenToSwapInto,
+            amountPortfolioToken,
+            ["0x"],
+          ),
+        ).to.be.revertedWithCustomError(
+          withdrawManager,
+          "InvalidTargetAddress",
+        );
       });
 
       it("should withdraw in single token by user", async () => {
@@ -584,7 +634,7 @@ describe.only("Tests for Deposit", () => {
           );
 
         await portfolio.approve(
-          withdrawBatch.address,
+          withdrawManager.address,
           BigNumber.from(amountPortfolioToken),
         );
 
@@ -606,7 +656,7 @@ describe.only("Tests for Deposit", () => {
           );
         }
 
-        await withdrawBatch.multiTokenSwapAndWithdraw(
+        await withdrawManager.withdraw(
           portfolio.address,
           tokenToSwapInto,
           amountPortfolioToken,
@@ -655,7 +705,7 @@ describe.only("Tests for Deposit", () => {
           );
 
         await portfolio.approve(
-          withdrawBatch.address,
+          withdrawManager.address,
           BigNumber.from(amountPortfolioToken),
         );
 
@@ -674,7 +724,7 @@ describe.only("Tests for Deposit", () => {
           }
         }
 
-        await withdrawBatch.multiTokenSwapAndWithdraw(
+        await withdrawManager.withdraw(
           portfolio.address,
           tokenToSwapInto,
           amountPortfolioToken,
@@ -728,12 +778,12 @@ describe.only("Tests for Deposit", () => {
         //----------Approval-------------
 
         await ERC20.attach(tokenToSwap).approve(
-          depositBatch.address,
+          depositManager.address,
           amountToSwap.toString(),
         );
 
         await expect(
-          depositBatch.multiTokenSwapAndTransfer({
+          depositManager.deposit({
             _minMintAmount: 0,
             _depositAmount: amountToSwap.toString(),
             _target: portfolio.address,
@@ -751,7 +801,7 @@ describe.only("Tests for Deposit", () => {
         let postResponse: any = [];
 
         await expect(
-          depositBatch.multiTokenSwapAndTransfer(
+          depositBatch.multiTokenSwapETHAndTransfer(
             {
               _minMintAmount: 0,
               _depositAmount: "1000000000000000000",

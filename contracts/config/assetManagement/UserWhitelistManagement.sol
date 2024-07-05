@@ -16,8 +16,8 @@ abstract contract UserWhitelistManagement is AssetManagerCheck, Initializable {
 
   mapping(address => bool) public whitelistedUsers;
 
-  event UserWhitelisted(address[] indexed users);
-  event UserRemovedFromWhitelist(address[] indexed users);
+  event UserWhitelisted(address[] users);
+  event UserRemovedFromWhitelist(address[] users);
 
   function __UserWhitelistManagement_init(
     address _protocolConfig

@@ -58,6 +58,11 @@ async function main() {
     priceOracle.address,
   ]);
 
+  await tenderly.verify({
+    name: "ProtocolConfig",
+    address: protocolConfig.address,
+  });
+
   await protocolConfig.enableTokens([
     addresses.WETH,
     addresses.USDC,
@@ -68,11 +73,6 @@ async function main() {
   await protocolConfig.updateProtocolStreamingFee(0);
 
   console.log("protocolConfig address:", protocolConfig.address);
-
-  await tenderly.verify({
-    name: "ProtocolConfig",
-    address: protocolConfig.address,
-  });
 
   await protocolConfig.setCoolDownPeriod("60");
 
@@ -142,6 +142,19 @@ async function main() {
     address: tokenExclusionManager.address,
   });
 
+  const TokenRemovalVault = await ethers.getContractFactory(
+    "TokenRemovalVault",
+  );
+  const tokenRemovalVault = await TokenRemovalVault.deploy();
+  await tokenRemovalVault.deployed();
+
+  console.log("tokenRemovalVault address:", tokenRemovalVault.address);
+
+  await tenderly.verify({
+    name: "TokenRemovalVault",
+    address: tokenRemovalVault.address,
+  });
+
   const DepositBatch = await ethers.getContractFactory("DepositBatch");
   const depositBatch = await DepositBatch.deploy();
 
@@ -150,6 +163,16 @@ async function main() {
   await tenderly.verify({
     name: "DepositBatch",
     address: depositBatch.address,
+  });
+
+  const DepositManager = await ethers.getContractFactory("DepositManager");
+  const depositManager = await DepositManager.deploy(depositBatch.address);
+
+  console.log("depositManager address:", depositManager.address);
+
+  await tenderly.verify({
+    name: "DepositManager",
+    address: depositManager.address,
   });
 
   const WithdrawBatch = await ethers.getContractFactory("WithdrawBatch");
@@ -162,7 +185,9 @@ async function main() {
     address: withdrawBatch.address,
   });
 
-  const PortfolioCalculations = await ethers.getContractFactory("PortfolioCalculations");
+  const PortfolioCalculations = await ethers.getContractFactory(
+    "PortfolioCalculations",
+  );
   const portfolioCalculations = await PortfolioCalculations.deploy();
 
   console.log("portfolioCalculations address:", portfolioCalculations.address);
@@ -171,7 +196,6 @@ async function main() {
     name: "PortfolioCalculations",
     address: portfolioCalculations.address,
   });
-
 
   console.log(
     "------------------------------ Deployment Ended ------------------------------",
@@ -188,6 +212,7 @@ async function main() {
         _baseRebalancingAddres: rebalancingDefault.address,
         _baseAssetManagementConfigAddress: assetManagementConfig.address,
         _feeModuleImplementationAddress: feeModule.address,
+        _baseTokenRemovalVaultImplementation: tokenRemovalVault.address,
         _baseVelvetGnosisSafeModuleAddress: velvetSafeModule.address,
         _gnosisSingleton: addresses.gnosisSingleton,
         _gnosisFallbackLibrary: addresses.gnosisFallbackLibrary,
@@ -205,6 +230,20 @@ async function main() {
 
   console.log("portfolioFactory address:", portfolioFactory.address);
 
+  const WithdrawManager = await ethers.getContractFactory("WithdrawManager");
+  const withdrawManager = await WithdrawManager.deploy();
+
+  console.log("withdrawManager address:", withdrawManager.address);
+
+  await tenderly.verify({
+    name: "WithdrawManager",
+    address: withdrawManager.address,
+  });
+
+  await withdrawManager.initialize(
+    withdrawBatch.address,
+    portfolioFactory.address,
+  );
 }
 
 // We recommend this pattern to be able to use async/await everywhere

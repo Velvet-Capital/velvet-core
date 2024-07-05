@@ -6,6 +6,8 @@ import {ErrorLibrary} from "../../library/ErrorLibrary.sol";
 import {IProtocolConfig} from "../../config/protocol/IProtocolConfig.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable-4.9.6/proxy/utils/Initializable.sol";
 
+import {IFeeModule} from "../../fee/IFeeModule.sol";
+
 /**
  * @title FeeManagement
  * @notice Manages the configuration and updating of fees within the protocol, such as management, performance, entry, and exit fees.
@@ -15,6 +17,8 @@ import {Initializable} from "@openzeppelin/contracts-upgradeable-4.9.6/proxy/uti
 abstract contract FeeManagement is AssetManagerCheck, Initializable {
   // Reference to the protocol configuration contract
   IProtocolConfig private protocolConfig;
+  // Reference to the fee module contract
+  IFeeModule private feeModule;
 
   // Current active fees
   uint256 public managementFee;
@@ -36,10 +40,16 @@ abstract contract FeeManagement is AssetManagerCheck, Initializable {
   // Events for tracking fee management actions
   event ProposeManagementFee(uint256 indexed newManagementFee);
   event ProposePerformanceFee(uint256 indexed newPerformanceFee);
-  event ProposeEntryAndExitFee(uint256 indexed newEntryFee, uint256 indexed newExitFee);
+  event ProposeEntryAndExitFee(
+    uint256 indexed newEntryFee,
+    uint256 indexed newExitFee
+  );
   event UpdateManagementFee(uint256 indexed newManagementFee);
   event UpdatePerformanceFee(uint256 indexed newPerformanceFee);
-  event UpdateEntryAndExitFee(uint256 indexed newEntryFee, uint256 indexed newExitFee);
+  event UpdateEntryAndExitFee(
+    uint256 indexed newEntryFee,
+    uint256 indexed newExitFee
+  );
   event DeleteProposedManagementFee();
   event DeleteProposedPerformanceFee();
   event DeleteProposedEntryAndExitFee();
@@ -58,7 +68,8 @@ abstract contract FeeManagement is AssetManagerCheck, Initializable {
     uint256 _managementFee,
     uint256 _performanceFee,
     uint256 _entryFee,
-    uint256 _exitFee
+    uint256 _exitFee,
+    address _feeModule
   ) internal onlyInitializing {
     if (_protocolConfig == address(0)) revert ErrorLibrary.InvalidAddress();
     protocolConfig = IProtocolConfig(_protocolConfig);
@@ -74,6 +85,7 @@ abstract contract FeeManagement is AssetManagerCheck, Initializable {
     performanceFee = _performanceFee;
     entryFee = _entryFee;
     exitFee = _exitFee;
+    feeModule = IFeeModule(_feeModule);
   }
 
   /**
@@ -114,6 +126,8 @@ abstract contract FeeManagement is AssetManagerCheck, Initializable {
 
     managementFee = newManagementFee;
     proposedManagementFeeTime = 0;
+
+    feeModule.chargeProtocolAndManagementFees();
 
     emit UpdateManagementFee(newManagementFee);
   }

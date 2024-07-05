@@ -9,13 +9,10 @@ import {IPortfolio} from "../core/interfaces/IPortfolio.sol";
 import {FunctionParameters} from "../FunctionParameters.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-
 /**
- * @title BatchHandler
- * @dev This contract facilitates batching multiple transactions for users, providing a seamless experience.
- * It swaps the user's single token (chosen by the user) to vault tokens of a portfolio using Enso and deposits
- * the tokens into the portfolio, issuing the user portfolio tokens. If the token to swap is the same as a portfolio token,
- * the user's amount is simply passed as calldata. Finally, any leftover dust is returned to the user.
+ * @title DepositBatch
+ * @notice A contract for performing multi-token swap and deposit operations.
+ * @dev This contract uses Enso's swap execution logic for delegating swaps.
  */
 contract DepositBatch is ReentrancyGuard {
   // The address of Enso's swap execution logic; swaps are delegated to this target.
@@ -25,27 +22,55 @@ contract DepositBatch is ReentrancyGuard {
    * @notice Performs a multi-token swap and deposit operation for the user.
    * @param data Struct containing parameters for the batch handler.
    */
-  function multiTokenSwapAndTransfer(
+  function multiTokenSwapETHAndTransfer(
     FunctionParameters.BatchHandler memory data
-  ) external payable nonReentrant{
+  ) external payable nonReentrant {
+    if (msg.value == 0) {
+      revert ErrorLibrary.InvalidBalance();
+    }
+
+    address user = msg.sender;
+
+    _multiTokenSwapAndDeposit(data, user);
+
+    (bool sent, ) = user.call{value: address(this).balance}("");
+    if (!sent) revert ErrorLibrary.TransferFailed();
+  }
+
+  /**
+   * @notice Performs a multi-token swap and deposit operation for the user.
+   * @param data Struct containing parameters for the batch handler.
+   */
+  function multiTokenSwapAndDeposit(
+    FunctionParameters.BatchHandler memory data,
+    address user
+  ) external payable nonReentrant {
+    address _depositToken = data._depositToken;
+
+    _multiTokenSwapAndDeposit(data, user);
+
+    // Return any leftover invested token dust to the user
+    uint256 depositTokenBalance = _getTokenBalance(
+      _depositToken,
+      address(this)
+    );
+    if (depositTokenBalance > 0) {
+      TransferHelper.safeTransfer(_depositToken, user, depositTokenBalance);
+    }
+  }
+
+  function _multiTokenSwapAndDeposit(
+    FunctionParameters.BatchHandler memory data,
+    address user
+  ) internal {
     address[] memory tokens = IPortfolio(data._target).getTokens();
+    address _depositToken = data._depositToken;
+    address target = data._target;
     uint256 tokenLength = tokens.length;
     uint256[] memory depositAmounts = new uint256[](tokenLength);
-    address user = msg.sender;
-    address _depositToken = data._depositToken;
 
     if (data._callData.length != tokenLength)
       revert ErrorLibrary.InvalidLength();
-
-    // Transfer tokens from user if no ETH is sent
-    if (msg.value == 0) {
-      TransferHelper.safeTransferFrom(
-        _depositToken,
-        user,
-        address(this),
-        data._depositAmount
-      );
-    }
 
     // Perform swaps and calculate deposit amounts for each token
     for (uint256 i; i < tokenLength; i++) {
@@ -55,16 +80,20 @@ contract DepositBatch is ReentrancyGuard {
         //Sending encoded balance instead of swap calldata
         balance = abi.decode(data._callData[i], (uint256));
       } else {
+        uint256 balanceBefore = _getTokenBalance(_token, address(this));
         (bool success, ) = SWAP_TARGET.delegatecall(data._callData[i]);
         if (!success) revert ErrorLibrary.CallFailed();
-        balance = _getTokenBalance(_token, address(this));
+        uint256 balanceAfter = _getTokenBalance(_token, address(this));
+        balance = balanceAfter - balanceBefore;
       }
       if (balance == 0) revert ErrorLibrary.InvalidBalanceDiff();
-      IERC20(_token).approve(data._target, balance);
+
+      IERC20(_token).approve(target, 0);
+      IERC20(_token).approve(target, balance);
       depositAmounts[i] = balance;
     }
 
-    IPortfolio(data._target).multiTokenDepositFor(
+    IPortfolio(target).multiTokenDepositFor(
       user,
       depositAmounts,
       data._minMintAmount
@@ -73,23 +102,10 @@ contract DepositBatch is ReentrancyGuard {
     //Return any leftover vault token dust to the user
     for (uint256 i; i < tokenLength; i++) {
       address _token = tokens[i];
-      TransferHelper.safeTransfer(
-        _token,
-        user,
-        _getTokenBalance(_token, address(this))
-      );
-    }
-
-    // Return any leftover invested token dust to the user
-    if (msg.value == 0) {
-      TransferHelper.safeTransfer(
-        _depositToken,
-        user,
-        _getTokenBalance(_depositToken, address(this))
-      );
-    } else {
-      (bool sent, ) = user.call{value: address(this).balance}("");
-      if (!sent) revert ErrorLibrary.TransferFailed();
+      uint256 portfoliodustReturn = _getTokenBalance(_token, address(this));
+      if (portfoliodustReturn > 0) {
+        TransferHelper.safeTransfer(_token, user, portfoliodustReturn);
+      }
     }
   }
 

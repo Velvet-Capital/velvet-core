@@ -134,17 +134,17 @@ abstract contract VaultManagerV3_2 is
     if (_totalSupply == 0) {
       tokenAmount = assetManagementConfig().initialPortfolioAmount();
       // Reset the high watermark to zero if it's not the first deposit.
-      feeModule().updateHighWaterMark(0);
+      feeModule().resetHighWaterMark();
     } else {
       // Calculate the amount of portfolio tokens to mint based on the deposit.
       tokenAmount = _getTokenAmountToMint(_depositRatio, _totalSupply);
     }
 
-    // Ensure the minted amount meets the user's minimum expectation to mitigate slippage.
-    _verifyUserMintedAmount(tokenAmount, _minMintAmount);
-
     // Mint the calculated portfolio tokens to the user, applying any cooldown periods.
     tokenAmount = _mintTokenAndSetCooldown(_depositFor, tokenAmount);
+
+    // Ensure the minted amount meets the user's minimum expectation to mitigate slippage.
+    _verifyUserMintedAmount(tokenAmount, _minMintAmount);
 
     uint256 userBalanceAfterDeposit = balanceOf(_depositFor);
     // Notify listeners of the deposit event.
@@ -167,11 +167,20 @@ abstract contract VaultManagerV3_2 is
   function multiTokenWithdrawal(
     uint256 _portfolioTokenAmount
   ) external virtual nonReentrant {
+    // Retrieve the list of tokens currently in the portfolio.
+    address[] memory portfolioTokens = tokens;
+
+    address[] memory emptyArray;
+
+    uint256 portfolioTokenLength = portfolioTokens.length;
+
     // Perform pre-withdrawal checks, including balance and cooldown verification.
     _beforeWithdrawCheck(
       msg.sender,
       IPortfolio(address(this)),
-      _portfolioTokenAmount
+      _portfolioTokenAmount,
+      portfolioTokenLength,
+      emptyArray
     );
     // Validate the cooldown period of the user.
     _checkCoolDownPeriod(msg.sender);
@@ -183,10 +192,6 @@ abstract contract VaultManagerV3_2 is
     // Burn the user's portfolio tokens and calculate the adjusted withdrawal amount post-fees.
     _portfolioTokenAmount = _burnWithdraw(msg.sender, _portfolioTokenAmount);
 
-    // Retrieve the list of tokens currently in the portfolio.
-    address[] memory portfolioTokens = tokens;
-    // Calculate and transfer each token's proportional amount back to the user.
-    uint256 portfolioTokenLength = portfolioTokens.length;
     uint256[] memory userWithdrawalAmounts = new uint256[](
       portfolioTokenLength
     );
@@ -209,6 +214,7 @@ abstract contract VaultManagerV3_2 is
       msg.sender,
       _portfolioTokenAmount,
       address(this),
+      portfolioTokens,
       userBalanceAfterWithdrawal,
       userWithdrawalAmounts
     );

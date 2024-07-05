@@ -22,8 +22,8 @@ abstract contract TokenWhitelistManagement is AssetManagerCheck, Initializable {
   bool public tokenWhitelistingEnabled;
 
   // Events for logging changes to the whitelist.
-  event TokenWhitelisted(address[] indexed tokens);
-  event TokensRemovedFromWhitelist(address[] indexed tokens);
+  event TokenWhitelisted(address[] tokens);
+  event TokensRemovedFromWhitelist(address[] tokens);
 
   /**
    * @dev Initializes the contract with a list of tokens to be whitelisted and sets the whitelisting enabled flag.
@@ -39,6 +39,9 @@ abstract contract TokenWhitelistManagement is AssetManagerCheck, Initializable {
     protocolConfig = IProtocolConfig(_protocolConfig);
     tokenWhitelistingEnabled = _tokenWhitelistingEnabled;
     if (tokenWhitelistingEnabled) {
+      if (_whitelistTokens.length == 0)
+        revert ErrorLibrary.InvalidTokenWhitelistLength();
+
       _addTokensToWhitelist(_whitelistTokens);
     }
   }

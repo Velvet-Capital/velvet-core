@@ -2,7 +2,7 @@
 pragma solidity 0.8.17;
 
 import {IPortfolio} from "../../contracts/core/interfaces/IPortfolio.sol";
-import {IPortfolioFactory} from "../../contracts/front-end-helpers/IPortfolioFactory.sol";
+import {IPortfolioFactory} from "../../contracts/core/interfaces/IPortfolioFactory.sol";
 import {IAllowanceTransfer} from "../../contracts/core/interfaces/IAllowanceTransfer.sol";
 import {IRebalancing} from "../../contracts/rebalance/IRebalancing.sol";
 import {Addresses} from "../foundry/utils/Addresses.sol";
