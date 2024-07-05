@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.17;
 
 import {ErrorLibrary} from "../../library/ErrorLibrary.sol";
 import {IPortfolio} from "../interfaces/IPortfolio.sol";
@@ -60,7 +60,9 @@ abstract contract ChecksAndValidations is Dependencies {
   function _beforeWithdrawCheck(
     address owner,
     IPortfolio portfolio,
-    uint256 _tokenAmount
+    uint256 _tokenAmount,
+    uint256 _tokensLength,
+    address[] memory _exemptionTokens
   ) internal view {
     if (protocolConfig().isProtocolEmergencyPaused()) {
       revert ErrorLibrary.ProtocolIsPaused();
@@ -75,6 +77,9 @@ abstract contract ChecksAndValidations is Dependencies {
       balanceAfterRedemption < protocolConfig().minPortfolioTokenHoldingAmount()
     ) {
       revert ErrorLibrary.CallerNeedToMaintainMinTokenAmount();
+    }
+    if (_exemptionTokens.length > _tokensLength) {
+      revert ErrorLibrary.InvalidExemptionTokensLength();
     }
   }
 

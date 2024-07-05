@@ -124,6 +124,16 @@ abstract contract FeeConfig is
   }
 
   /**
+   * @notice Resets the high watermark for the portfolio to zero.
+   * @dev This function can only be called by the portfolio manager. The high watermark represents the highest value
+   * the portfolio has reached and is used for calculating performance fees. Resetting it to zero can be used for
+   * specific scenarios, such as the start of a new performance period.
+   */
+  function resetHighWaterMark() external onlyPortfolioManager {
+    highWatermark = 0;
+  }
+
+  /**
    * @notice Authorizes contract upgrade by the contract owner.
    * @param _newImplementation Address of the new contract implementation.
    */

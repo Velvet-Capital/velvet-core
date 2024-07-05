@@ -11,6 +11,8 @@ import {TokenManagement} from "./TokenManagement.sol";
 import {ProtocolFeeManagement} from "./ProtocolFeeManagement.sol";
 import {SolverManagement} from "./SolverManagement.sol";
 
+import {RewardTargetManagement} from "./RewardTargetManagement.sol";
+
 /**
  * @title MainContract
  * @dev Main contract integrating all management functionalities with access control.
@@ -23,7 +25,8 @@ contract ProtocolConfig is
   SystemSettings,
   TokenManagement,
   ProtocolFeeManagement,
-  SolverManagement
+  SolverManagement,
+  RewardTargetManagement
 {
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() {

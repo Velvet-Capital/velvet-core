@@ -24,11 +24,12 @@ contract Rebalancing is
 {
   /// @notice Emitted when weights are successfully updated after a swap operation.
   event UpdatedWeights();
-  event UpdatedTokens(address[] indexed newTokens);
+  event UpdatedTokens(address[] newTokens);
   event PortfolioTokenRemoved(
     address indexed token,
+    address indexed vault,
     uint256 indexed balance,
-    uint256 indexed atSnapshotId
+    uint256 atSnapshotId
   );
 
   uint256 public constant TOTAL_WEIGHT = 10_000; // Represents 100% in basis points.
@@ -94,10 +95,7 @@ contract Rebalancing is
     uint256[] calldata _sellAmounts,
     address _handler,
     bytes memory _callData
-  ) private {
-    if (protocolConfig.isProtocolPaused())
-      revert ErrorLibrary.ProtocolIsPaused();
-
+  ) private protocolNotPaused {
     if (!protocolConfig.isSolver(_handler)) revert ErrorLibrary.InvalidSolver();
 
     // Pull tokens to be completely removed from portfolio to handler for swapping.
@@ -120,8 +118,10 @@ contract Rebalancing is
 
     // Verify that all specified sell tokens have been completely sold by the handler.
     for (uint256 i; i < sellTokenLength; i++) {
-      if (_getTokenBalanceOf(_sellTokens[i], _handler) != 0)
-        revert ErrorLibrary.BalanceOfHandlerShouldBeZero();
+      uint256 dustValue = (_sellAmounts[i] *
+        protocolConfig.allowedDustTolerance()) / TOTAL_WEIGHT;
+      if (_getTokenBalanceOf(_sellTokens[i], _handler) > dustValue)
+        revert ErrorLibrary.BalanceOfHandlerShouldNotExceedDust();
     }
 
     // Ensure that each token bought by the solver is in the portfolio list.
@@ -200,7 +200,7 @@ contract Rebalancing is
    */
   function removePortfolioToken(
     address _token
-  ) external onlyAssetManager nonReentrant {
+  ) external onlyAssetManager nonReentrant protocolNotPaused {
     if (!_isPortfolioToken(_token)) revert ErrorLibrary.NotPortfolioToken();
 
     // Generate a new token list excluding the token to be removed
@@ -227,7 +227,7 @@ contract Rebalancing is
    */
   function removeNonPortfolioToken(
     address _token
-  ) external onlyAssetManager nonReentrant {
+  ) external onlyAssetManager protocolNotPaused nonReentrant {
     if (_isPortfolioToken(_token)) revert ErrorLibrary.IsPortfolioToken();
 
     uint256 tokenBalance = IERC20Upgradeable(_token).balanceOf(_vault);
@@ -244,7 +244,7 @@ contract Rebalancing is
   function removePortfolioTokenPartially(
     address _token,
     uint256 _percentage
-  ) external onlyAssetManager nonReentrant {
+  ) external onlyAssetManager protocolNotPaused nonReentrant {
     if (!_isPortfolioToken(_token)) revert ErrorLibrary.NotPortfolioToken();
 
     uint256 tokenBalanceToRemove = _getTokenBalanceForPartialRemoval(
@@ -262,7 +262,7 @@ contract Rebalancing is
   function removeNonPortfolioTokenPartially(
     address _token,
     uint256 _percentage
-  ) external onlyAssetManager nonReentrant {
+  ) external onlyAssetManager protocolNotPaused nonReentrant {
     if (_isPortfolioToken(_token)) revert ErrorLibrary.IsPortfolioToken();
 
     uint256 tokenBalanceToRemove = _getTokenBalanceForPartialRemoval(
@@ -294,23 +294,27 @@ contract Rebalancing is
     // Snapshot for record-keeping before removing the token
     uint256 currentId = tokenExclusionManager.snapshot();
 
+    // Deploy a new token removal vault for the token to remove
+    address tokenRemovalVault = tokenExclusionManager.deployTokenRemovalVault();
+
+    // Transfer the token balance from the vault to the token exclusion manager
+    portfolio.pullFromVault(_token, _tokenBalance, tokenRemovalVault);
+
     // Record the removal details in the token exclusion manager
     tokenExclusionManager.setTokenAndSupplyRecord(
       currentId - 1,
-      _tokenBalance,
       _token,
+      tokenRemovalVault,
       portfolio.totalSupply()
     );
 
-    // Transfer the token balance from the vault to the token exclusion manager
-    portfolio.pullFromVault(
-      _token,
-      _tokenBalance,
-      address(tokenExclusionManager)
-    );
-
     // Log the token removal event
-    emit PortfolioTokenRemoved(_token, _tokenBalance, currentId - 1);
+    emit PortfolioTokenRemoved(
+      _token,
+      tokenRemovalVault,
+      _tokenBalance,
+      currentId - 1
+    );
   }
 
   /**
@@ -337,7 +341,10 @@ contract Rebalancing is
     address _tokenToBeClaimed,
     address _target,
     bytes memory _claimCalldata
-  ) external onlyAssetManager {
+  ) external onlyAssetManager protocolNotPaused nonReentrant {
+    if (!protocolConfig.isRewardTargetEnabled(_target))
+      revert ErrorLibrary.RewardTargetNotEnabled();
+
     // Retrieve the list of all tokens in the portfolio and their balances before the claim operation
     address[] memory tokens = portfolio.getTokens();
     uint256[] memory tokenBalancesInVaultBefore = getTokenBalancesOf(
@@ -384,5 +391,16 @@ contract Rebalancing is
     address _newImplementation
   ) internal override onlyOwner {
     // Intentionally left empty as required by an abstract contract
+  }
+
+  /**
+   * @notice Modifier to restrict function if protocol is paused.
+   * Uses the `isProtocolPaused` function to determine the protocol pause status.
+   * @dev Reverts with a ProtocolIsPaused error if the protocol is paused.
+   */
+  modifier protocolNotPaused() {
+    if (protocolConfig.isProtocolPaused())
+      revert ErrorLibrary.ProtocolIsPaused();
+    _; // Continues function execution if the protocol is not paused
   }
 }

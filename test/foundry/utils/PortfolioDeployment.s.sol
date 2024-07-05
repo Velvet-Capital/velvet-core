@@ -3,7 +3,7 @@ pragma solidity 0.8.17;
 
 import {Script} from "forge-std/Script.sol";
 import {PortfolioFactory} from "../../../contracts/PortfolioFactory.sol";
-import {IPortfolioFactory} from "../../../contracts/front-end-helpers/IPortfolioFactory.sol";
+import {IPortfolioFactory} from "../../../contracts/core/interfaces/IPortfolioFactory.sol";
 
 import {FunctionParameters} from "../../../contracts/FunctionParameters.sol";
 
@@ -31,6 +31,7 @@ contract PortfolioDeployment is Script, Addresses {
       address rebalancing,
       address assetManagementConfig,
       address feeModule,
+      address tokenRemovalVault,
       address safe
     ) = baseContractDeploy.deployBaseContracts();
 
@@ -41,12 +42,12 @@ contract PortfolioDeployment is Script, Addresses {
       abi.encodeWithSelector(
         PortfolioFactory.initialize.selector,
         FunctionParameters.PortfolioFactoryInitData({
-          //_outAsset: 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c, // @todo change
           _basePortfolioAddress: portfolioSwap,
           _baseTokenExclusionManagerAddress: tokenExclusionManager,
           _baseRebalancingAddres: rebalancing,
           _baseAssetManagementConfigAddress: assetManagementConfig,
           _feeModuleImplementationAddress: feeModule,
+          _baseTokenRemovalVaultImplementation: tokenRemovalVault,
           _baseVelvetGnosisSafeModuleAddress: safe,
           _gnosisSingleton: BSC_GNOSIS_SINGLETON,
           _gnosisFallbackLibrary: BSC_GNOSIS_FALLBACK_LIB,

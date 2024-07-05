@@ -1,6 +1,6 @@
-// MockAccessController.sol
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+// SPDX-License-Identifier: BUSL-1.1
+
+pragma solidity 0.8.17;
 
 contract MockAccessController {
   // Implement minimal functionality required for your tests

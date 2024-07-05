@@ -29,6 +29,8 @@ contract PortfolioFactory is
   address internal baseAssetManagementConfigAddress;
   address internal feeModuleImplementationAddress;
   address internal baseVelvetGnosisSafeModuleAddress;
+  address internal baseTokenRemovalVaultAddress;
+
   address public protocolConfig;
   bool internal portfolioCreationPause;
 
@@ -39,6 +41,9 @@ contract PortfolioFactory is
   address public gnosisSafeProxyFactory;
 
   uint256 public portfolioId;
+
+  // The mapping is used to track the deployed portfolio addresses.
+  mapping(address => bool) public whitelistedPortfolioAddress;
 
   struct PortfoliolInfo {
     address portfolio;
@@ -56,12 +61,17 @@ contract PortfolioFactory is
   event PortfolioInfo(
     PortfoliolInfo portfolioData,
     uint256 indexed portfolioId,
-    address indexed _owner
+    string _name,
+    string _symbol,
+    address indexed _owner,
+    address indexed _accessController,
+    bool isPublicPortfolio
   );
   event PortfolioCreationState(bool indexed state);
   event UpgradePortfolio(address indexed newImplementation);
   event UpgradeAssetManagerConfig(address indexed newImplementation);
   event UpgradeFeeModule(address indexed newImplementation);
+  event UpdataTokenRemovalVaultBaseAddress(address indexed newImplementation);
   event UpgradeRebalance(address indexed newImplementation);
   event UpdateGnosisAddresses(
     address indexed newGnosisSingleton,
@@ -69,6 +79,9 @@ contract PortfolioFactory is
     address indexed newGnosisMultisendLibrary,
     address newGnosisSafeProxyFactory
   );
+  event UpgradeTokenExclusionManager(address indexed newImplementation);
+
+  event TransferSuperAdminOwnership(address indexed newOwner);
 
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() {
@@ -95,7 +108,8 @@ contract PortfolioFactory is
       initData._gnosisFallbackLibrary == address(0) ||
       initData._gnosisMultisendLibrary == address(0) ||
       initData._gnosisSafeProxyFactory == address(0) ||
-      initData._protocolConfig == address(0)
+      initData._protocolConfig == address(0) ||
+      initData._baseTokenRemovalVaultImplementation == address(0)
     ) revert ErrorLibrary.InvalidAddress();
     _setBasePortfolioAddress(initData._basePortfolioAddress);
     _setBaseRebalancingAddress(initData._baseRebalancingAddres);
@@ -107,6 +121,10 @@ contract PortfolioFactory is
     );
     _setFeeModuleImplementationAddress(
       initData._feeModuleImplementationAddress
+    );
+
+    setTokenRemovalVaultImplementationAddress(
+      initData._baseTokenRemovalVaultImplementation
     );
     baseVelvetGnosisSafeModuleAddress = initData
       ._baseVelvetGnosisSafeModuleAddress;
@@ -173,9 +191,13 @@ contract PortfolioFactory is
       bytes("")
     );
 
+    ERC1967Proxy _feeModule = new ERC1967Proxy(
+      feeModuleImplementationAddress,
+      bytes("")
+    );
+
     // Access Controller
     AccessController accessController = new AccessController();
-
     ERC1967Proxy _assetManagementConfig = new ERC1967Proxy(
       baseAssetManagementConfigAddress,
       abi.encodeWithSelector(
@@ -190,6 +212,7 @@ contract PortfolioFactory is
             ._minPortfolioTokenHoldingAmount,
           _protocolConfig: protocolConfig,
           _accessController: address(accessController),
+          _feeModule: address(_feeModule),
           _assetManagerTreasury: initData._assetManagerTreasury,
           _whitelistedTokens: initData._whitelistedTokens,
           _publicPortfolio: initData._public,
@@ -200,12 +223,9 @@ contract PortfolioFactory is
       )
     );
 
-    ERC1967Proxy _feeModule = new ERC1967Proxy(
-      feeModuleImplementationAddress,
-      bytes("")
-    );
-
     ERC1967Proxy portfolio = new ERC1967Proxy(basePortfolioAddress, bytes(""));
+
+    whitelistedPortfolioAddress[address(portfolio)] = true;
 
     // Vault creation
     address vaultAddress;
@@ -241,9 +261,14 @@ contract PortfolioFactory is
       })
     );
 
+    bool isPublic = initData._public;
+    string memory _name = initData._name;
+    string memory _symbol = initData._symbol;
+
     ITokenExclusionManager(address(_tokenExclusionManager)).init(
       address(accessController),
-      protocolConfig
+      protocolConfig,
+      baseTokenRemovalVaultAddress
     );
 
     IVelvetSafeModule(address(module)).setUp(
@@ -296,7 +321,11 @@ contract PortfolioFactory is
     emit PortfolioInfo(
       PortfolioInfolList[portfolioId],
       portfolioId,
-      msg.sender
+      _name,
+      _symbol,
+      msg.sender,
+      address(accessController),
+      isPublic
     );
     portfolioId = portfolioId + 1;
   }
@@ -313,7 +342,7 @@ contract PortfolioFactory is
   }
 
   /**
-   * @notice This function is used to upgrade the Portfolio contract
+   * @notice This function is used to upgrade the Token Exclusion Manager contract
    * @param _proxy Proxy address
    * @param _newImpl New implementation address
    */
@@ -323,7 +352,7 @@ contract PortfolioFactory is
   ) external virtual onlyOwner {
     _setBaseTokenExclusionManagerAddress(_newImpl);
     _upgrade(_proxy, _newImpl);
-    emit UpgradePortfolio(_newImpl);
+    emit UpgradeTokenExclusionManager(_newImpl);
   }
 
   /**
@@ -457,6 +486,27 @@ contract PortfolioFactory is
   }
 
   /**
+   * @notice This function is used to set the token removal vault implementation address
+   * @param _baseTokenRemovalVault Address of the token removal vault to set as base
+   */
+  function setTokenRemovalVaultImplementationAddress(
+    address _baseTokenRemovalVault
+  ) internal {
+    baseTokenRemovalVaultAddress = _baseTokenRemovalVault;
+  }
+
+  /**
+   * @notice This function is used to set the Token Removal Vault implementation address
+   * @param _newImpl New implementation address
+   */
+  function setTokenRemovalVaultModule(
+    address _newImpl
+  ) external virtual onlyOwner {
+    setTokenRemovalVaultImplementationAddress(_newImpl);
+    emit UpdataTokenRemovalVaultBaseAddress(_newImpl);
+  }
+
+  /**
    * @notice This function allows us to update gnosis deployment addresses
    * @param _newGnosisSingleton New address of GnosisSingleton
    * @param _newGnosisFallbackLibrary New address of GnosisFallbackLibrary
@@ -504,6 +554,8 @@ contract PortfolioFactory is
     if (!accessController.hasRole(SUPER_ADMIN, msg.sender))
       revert ErrorLibrary.CallerNotSuperAdmin();
     accessController.transferSuperAdminOwnership(msg.sender, _account);
+
+    emit TransferSuperAdminOwnership(_account);
   }
 
   /**

@@ -51,16 +51,18 @@ describe.only("Tests for Deposit + Withdrawal", () => {
   let velvetSafeModule: VelvetSafeModule;
   let portfolio: any;
   let portfolio1: any;
+  let portfolio2: any;
   let portfolioCalculations: any;
-  let portfolioCalculations1: any;
   let tokenExclusionManager: any;
   let tokenExclusionManager1: any;
+  let tokenExclusionManager2: any;
   let ensoHandler: EnsoHandler;
   let portfolioContract: Portfolio;
   let portfolioFactory: PortfolioFactory;
   let swapHandler: UniswapV2Handler;
   let rebalancing: any;
   let rebalancing1: any;
+  let rebalancing2: any;
   let protocolConfig: ProtocolConfig;
   let txObject;
   let owner: SignerWithAddress;
@@ -149,6 +151,9 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         addresses.ADoge,
         addresses.USDCe,
         addresses.USDT,
+        addresses.CAKE,
+        addresses.SUSHI,
+        addresses.LINK,
         addresses.aArbUSDC,
         addresses.aArbUSDT,
         addresses.MAIN_LP_USDT,
@@ -159,6 +164,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
       const FeeModule = await ethers.getContractFactory("FeeModule", {});
       const feeModule = await FeeModule.deploy();
       await feeModule.deployed();
+
+      const TokenRemovalVault = await ethers.getContractFactory(
+        "TokenRemovalVault",
+      );
+      const tokenRemovalVault = await TokenRemovalVault.deploy();
+      await tokenRemovalVault.deployed();
 
       const VelvetSafeModule = await ethers.getContractFactory(
         "VelvetSafeModule",
@@ -180,6 +191,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             _baseRebalancingAddres: rebalancingDefult.address,
             _baseAssetManagementConfigAddress: assetManagementConfig.address,
             _feeModuleImplementationAddress: feeModule.address,
+            _baseTokenRemovalVaultImplementation: tokenRemovalVault.address,
             _baseVelvetGnosisSafeModuleAddress: velvetSafeModule.address,
             _gnosisSingleton: addresses.gnosisSingleton,
             _gnosisFallbackLibrary: addresses.gnosisFallbackLibrary,
@@ -232,11 +244,32 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           _transferableToPublic: false,
           _whitelistTokens: false,
         });
+
+      const portfolioFactoryCreate3 =
+        await portfolioFactory.createPortfolioNonCustodial({
+          _name: "PORTFOLIOLY",
+          _symbol: "IDX",
+          _managementFee: "200",
+          _performanceFee: "2500",
+          _entryFee: "0",
+          _exitFee: "0",
+          _initialPortfolioAmount: "100000000000000000000",
+          _minPortfolioTokenHoldingAmount: "10000000000000000",
+          _assetManagerTreasury: assetManagerTreasury.address,
+          _whitelistedTokens: whitelistedTokens,
+          _public: true,
+          _transferable: false,
+          _transferableToPublic: false,
+          _whitelistTokens: false,
+        });
       const portfolioAddress = await portfolioFactory.getPortfolioList(0);
       const portfolioInfo = await portfolioFactory.PortfolioInfolList(0);
 
       const portfolioAddress1 = await portfolioFactory.getPortfolioList(1);
       const portfolioInfo1 = await portfolioFactory.PortfolioInfolList(1);
+
+      const portfolioAddress2 = await portfolioFactory.getPortfolioList(2);
+      const portfolioInfo2 = await portfolioFactory.PortfolioInfolList(2);
 
       portfolio = await ethers.getContractAt(
         Portfolio__factory.abi,
@@ -253,8 +286,17 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         Portfolio__factory.abi,
         portfolioAddress1,
       );
-      portfolioCalculations1 = await PortfolioCalculations.deploy();
-      await portfolioCalculations1.deployed();
+
+      rebalancing = await ethers.getContractAt(
+        Rebalancing__factory.abi,
+        portfolioInfo.rebalancing,
+      );
+
+      /////////////
+      portfolio2 = await ethers.getContractAt(
+        Portfolio__factory.abi,
+        portfolioAddress2,
+      );
 
       rebalancing = await ethers.getContractAt(
         Rebalancing__factory.abi,
@@ -266,6 +308,11 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         portfolioInfo1.rebalancing,
       );
 
+      rebalancing2 = await ethers.getContractAt(
+        Rebalancing__factory.abi,
+        portfolioInfo2.rebalancing,
+      );
+
       tokenExclusionManager = await ethers.getContractAt(
         TokenExclusionManager__factory.abi,
         portfolioInfo.tokenExclusionManager,
@@ -274,6 +321,11 @@ describe.only("Tests for Deposit + Withdrawal", () => {
       tokenExclusionManager1 = await ethers.getContractAt(
         TokenExclusionManager__factory.abi,
         portfolioInfo1.tokenExclusionManager,
+      );
+
+      tokenExclusionManager2 = await ethers.getContractAt(
+        TokenExclusionManager__factory.abi,
+        portfolioInfo2.tokenExclusionManager,
       );
 
       console.log("portfolio deployed to:", portfolio.address);
@@ -332,7 +384,16 @@ describe.only("Tests for Deposit + Withdrawal", () => {
       it("should init 2nd portfolio tokens", async () => {
         await portfolio1
           .connect(nonOwner)
-          .initToken([addresses.ARB, addresses.WBTC, addresses.USDCe]);
+          .initToken([
+            addresses.ARB,
+            addresses.WBTC,
+            addresses.USDCe,
+            addresses.LINK,
+            addresses.DAI,
+            addresses.USDT,
+            addresses.SUSHI,
+            addresses.USDC,
+          ]);
       });
 
       it("deposit should fail if user has not approve permit2 contract", async () => {
@@ -406,6 +467,16 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         for (let i = 0; i < tokens.length; i++) {
           await ERC20.attach(tokens[i])
             .connect(nonOwner)
+            .approve(PERMIT2_ADDRESS, MaxAllowanceTransferAmount);
+        }
+        for (let i = 0; i < tokens.length; i++) {
+          await ERC20.attach(tokens[i])
+            .connect(owner)
+            .approve(PERMIT2_ADDRESS, MaxAllowanceTransferAmount);
+        }
+        for (let i = 0; i < tokens.length; i++) {
+          await ERC20.attach(tokens[i])
+            .connect(addr2)
             .approve(PERMIT2_ADDRESS, MaxAllowanceTransferAmount);
         }
       });
@@ -816,6 +887,67 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const signature = await owner._signTypedData(domain, types, values);
 
         await portfolio1.multiTokenDeposit(amounts, "0", permit, signature);
+
+        const supplyAfter = await portfolio1.totalSupply();
+
+        expect(Number(supplyAfter)).to.be.greaterThan(Number(supplyBefore));
+        console.log("supplyAfter", supplyAfter);
+      });
+
+      it("should deposit multitoken into 2nd fund(Third Deposit)", async () => {
+        function toDeadline(expiration: number) {
+          return Math.floor((Date.now() + expiration) / 1000);
+        }
+
+        let tokenDetails = [];
+
+        let amounts = [];
+
+        const supplyBefore = await portfolio1.totalSupply();
+        const tokens = await portfolio1.getTokens();
+
+        const permit2 = await ethers.getContractAt(
+          "IAllowanceTransfer",
+          PERMIT2_ADDRESS,
+        );
+
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+        for (let i = 0; i < tokens.length; i++) {
+          let { nonce } = await permit2.allowance(
+            addr2.address,
+            tokens[i],
+            portfolio1.address,
+          );
+          await swapHandler.swapETHToTokens("5000", tokens[i], addr2.address, {
+            value: "100000000000000000",
+          });
+          let balance = await ERC20.attach(tokens[i]).balanceOf(addr2.address);
+          let detail = {
+            token: tokens[i],
+            amount: balance,
+            expiration: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+            nonce,
+          };
+          amounts.push(balance);
+          tokenDetails.push(detail);
+        }
+
+        const permit: PermitBatch = {
+          details: tokenDetails,
+          spender: portfolio1.address,
+          sigDeadline: toDeadline(/* 30 minutes= */ 1000 * 60 * 60 * 30),
+        };
+
+        const { domain, types, values } = AllowanceTransfer.getPermitData(
+          permit,
+          PERMIT2_ADDRESS,
+          chainId,
+        );
+        const signature = await addr2._signTypedData(domain, types, values);
+
+        await portfolio1
+          .connect(addr2)
+          .multiTokenDeposit(amounts, "0", permit, signature);
 
         const supplyAfter = await portfolio1.totalSupply();
 
@@ -1767,8 +1899,6 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           await ERC20.attach(sellToken).balanceOf(vault),
         ).toString();
 
-        const data = await createEnsoDataElement(sellToken, buyToken, balance);
-
         const postResponse = await createEnsoCallDataRoute(
           ensoHandler.address,
           ensoHandler.address,
@@ -1913,40 +2043,46 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         await rebalancing.removePortfolioToken(addresses.WBTC);
       });
 
-      it("user1(owner) should be able to claim their removed tokens", async () => {
+      it("user1(owner) should be able to claim their removed tokens at snapshot id 1", async () => {
         let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
-        const tokenToRemove = addresses.WBTC;
+        const tokenRemoved = addresses.WBTC;
 
-        let tokenBalanceBefore = await ERC20.attach(tokenToRemove).balanceOf(
+        let tokenBalanceBefore = await ERC20.attach(tokenRemoved).balanceOf(
           owner.address,
         );
 
         let userShare = (
           await tokenExclusionManager.userRecord(owner.address, 1)
         ).portfolioBalance;
-        let totalSupply = await tokenExclusionManager.totalSupplyRecord(1);
+        let totalSupply = (await tokenExclusionManager.removedToken(1))
+          .totalSupply;
 
         let userIdxShareRatio = BigNumber.from(userShare)
           .mul(100)
-          .div(BigNumber.from(totalSupply));
+          .div(BigNumber.from(totalSupply))
+          .toString();
 
-        await tokenExclusionManager.claimRemovedTokens(owner.address);
+        let removedTokenVault = (await tokenExclusionManager.removedToken(1))
+          .vault;
 
-        let tokenBalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
+        let tokenBalanceBeforeVault = await ERC20.attach(
+          tokenRemoved,
+        ).balanceOf(removedTokenVault);
+
+        await tokenExclusionManager.claimTokenAtId(owner.address, 1);
+
+        let tokenBalanceAfter = await ERC20.attach(tokenRemoved).balanceOf(
           owner.address,
         );
 
-        let removedTokenBalance = (await tokenExclusionManager.removedToken(1))
-          .balanceAtRemoval;
-
-        let userRemovedTokenRatio = BigNumber.from(tokenBalanceAfter)
-          .sub(BigNumber.from(tokenBalanceBefore))
-          .mul(100)
-          .div(BigNumber.from(removedTokenBalance));
-
-        let balanceDiff = BigNumber.from(tokenBalanceAfter).sub(
-          BigNumber.from(tokenBalanceBefore),
+        let tokenBalanceAfterVault = await ERC20.attach(tokenRemoved).balanceOf(
+          removedTokenVault,
         );
+
+        let userRemovedTokenRatio = BigNumber.from(tokenBalanceBeforeVault)
+          .sub(BigNumber.from(tokenBalanceAfterVault))
+          .mul(100)
+          .div(BigNumber.from(tokenBalanceBeforeVault));
 
         expect(tokenBalanceAfter).to.be.greaterThan(tokenBalanceBefore);
         expect(userRemovedTokenRatio).to.be.equals(userIdxShareRatio);
@@ -1960,7 +2096,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           owner.address,
         );
 
-        await tokenExclusionManager.claimRemovedTokens(owner.address);
+        await tokenExclusionManager.claimTokenAtId(owner.address, 1);
 
         let tokenBalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
           owner.address,
@@ -2015,25 +2151,35 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         let userShare = (
           await tokenExclusionManager.userRecord(nonOwner.address, 1)
         ).portfolioBalance;
-        let totalSupply = await tokenExclusionManager.totalSupplyRecord(1);
+
+        let totalSupply = (await tokenExclusionManager.removedToken(1))
+          .totalSupply;
 
         let userIdxShareRatio = BigNumber.from(userShare)
           .mul(100)
           .div(BigNumber.from(totalSupply));
 
-        await tokenExclusionManager.claimRemovedTokens(nonOwner.address);
+        let removedTokenVault = (await tokenExclusionManager.removedToken(1))
+          .vault;
+
+        let tokenBalanceBeforeVault = await ERC20.attach(
+          tokenToRemove,
+        ).balanceOf(removedTokenVault);
+
+        await tokenExclusionManager.claimTokenAtId(nonOwner.address, 1);
 
         let tokenBalanceAfter: any = await ERC20.attach(
           tokenToRemove,
         ).balanceOf(nonOwner.address);
 
-        let removedTokenBalance = (await tokenExclusionManager.removedToken(1))
-          .balanceAtRemoval;
+        let tokenBalanceAfterVault = await ERC20.attach(
+          tokenToRemove,
+        ).balanceOf(removedTokenVault);
 
-        let userRemovedTokenRatio = BigNumber.from(tokenBalanceAfter)
-          .sub(BigNumber.from(tokenBalanceBefore))
+        let userRemovedTokenRatio = BigNumber.from(tokenBalanceBeforeVault)
+          .sub(BigNumber.from(tokenBalanceAfterVault))
           .mul(100)
-          .div(BigNumber.from(removedTokenBalance));
+          .div(BigNumber.from(tokenBalanceBeforeVault));
 
         expect(tokenBalanceAfter).to.be.greaterThan(tokenBalanceBefore);
         expect(userRemovedTokenRatio).to.be.equals(userIdxShareRatio);
@@ -2047,7 +2193,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           owner.address,
         );
 
-        await tokenExclusionManager.claimRemovedTokens(addr1.address);
+        await tokenExclusionManager.claimTokenAtId(addr1.address, 1);
 
         let tokenBalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
           owner.address,
@@ -2089,27 +2235,14 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         let vaultBalanceBefore = await ERC20.attach(tokenToRemove).balanceOf(
           vault,
         );
-        let tokenExclusionManagerBalanceBefore = await ERC20.attach(
-          tokenToRemove,
-        ).balanceOf(tokenExclusionManager.address);
 
         await rebalancing.removePortfolioTokenPartially(tokenToRemove, "5000");
 
         let vaultBalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
           vault,
         );
-        let tokenExclusionManagerBalanceAfter = await ERC20.attach(
-          tokenToRemove,
-        ).balanceOf(tokenExclusionManager.address);
 
         expect(vaultBalanceBefore).to.be.greaterThan(vaultBalanceAfter);
-        expect(tokenExclusionManagerBalanceAfter).to.be.greaterThan(
-          tokenExclusionManagerBalanceBefore,
-        );
-
-        expect(
-          tokenExclusionManagerBalanceAfter.add(vaultBalanceAfter),
-        ).to.be.equal(vaultBalanceBefore);
       });
 
       it("user1 (owner) should be able to claim the partially removed token", async () => {
@@ -2126,41 +2259,47 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           await tokenExclusionManager.userRecord(owner.address, 2)
         ).portfolioBalance;
 
-        let totalSupply = await tokenExclusionManager.totalSupplyRecord(2);
+        let totalSupply = (await tokenExclusionManager.removedToken(2))
+          .totalSupply;
+
+        console.log("totalSupply", totalSupply);
 
         let userIdxShareRatio1 = BigNumber.from(userShare)
           .mul(100)
           .div(BigNumber.from(totalSupply));
 
-        let tokenExclusionManagerBalanceBefore = await ERC20.attach(
-          tokenToRemove,
-        ).balanceOf(tokenExclusionManager.address);
+        let removedTokenVault = (await tokenExclusionManager.removedToken(2))
+          .vault;
 
-        await tokenExclusionManager.claimRemovedTokens(owner.address);
-
-        let tokenExclusionManagerBalanceAfter = await ERC20.attach(
+        let tokenRemovalVaultBalanceBefore = await ERC20.attach(
           tokenToRemove,
-        ).balanceOf(tokenExclusionManager.address);
+        ).balanceOf(removedTokenVault);
+
+        await tokenExclusionManager.claimTokenAtId(owner.address, 2);
 
         let token1BalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
           owner.address,
         );
 
-        let removedTokenBalance = (await tokenExclusionManager.removedToken(2))
-          .balanceAtRemoval;
+        let tokenRemovalVaultBalanceAfter = await ERC20.attach(
+          tokenToRemove,
+        ).balanceOf(removedTokenVault);
 
-        let userRemovedToken1Ratio = BigNumber.from(token1BalanceAfter)
-          .sub(BigNumber.from(token1BalanceBefore))
+        let totalSupplyAfter = (await tokenExclusionManager.removedToken(2))
+          .totalSupply;
+
+        let userRemovedToken1Ratio = BigNumber.from(
+          tokenRemovalVaultBalanceBefore,
+        )
+          .sub(BigNumber.from(tokenRemovalVaultBalanceAfter))
           .mul(100)
-          .div(BigNumber.from(removedTokenBalance));
+          .div(BigNumber.from(tokenRemovalVaultBalanceBefore));
 
+        expect(totalSupplyAfter).to.be.equals(
+          BigNumber.from(totalSupply).sub(BigNumber.from(userShare)),
+        );
         expect(token1BalanceAfter).to.be.greaterThan(token1BalanceBefore);
         expect(userRemovedToken1Ratio).to.be.equals(userIdxShareRatio1);
-        expect(token1BalanceAfter.sub(token1BalanceBefore)).to.be.equal(
-          tokenExclusionManagerBalanceBefore.sub(
-            tokenExclusionManagerBalanceAfter,
-          ),
-        );
       });
 
       it("assetManager should create 2 snapshot(remove 2 tokens) simultaneously for 2nd Portfolio Fund", async () => {
@@ -2170,6 +2309,24 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         await rebalancing1
           .connect(nonOwner)
           .removePortfolioToken(addresses.ARB);
+      });
+
+      it("should fail if startId is greater then last Id", async () => {
+        await expect(
+          tokenExclusionManager1.claimRemovedTokens(owner.address, 2, 1),
+        ).to.be.revertedWithCustomError(tokenExclusionManager1, "InvalidId");
+      });
+
+      it("should fail if last Id is greater then current snapshot id", async () => {
+        await expect(
+          tokenExclusionManager1.claimRemovedTokens(owner.address, 1, 5),
+        ).to.be.revertedWithCustomError(tokenExclusionManager1, "InvalidId");
+      });
+
+      it("should fail if id is greater then currentSnapsotId", async () => {
+        await expect(
+          tokenExclusionManager1.claimTokenAtId(owner.address, 5),
+        ).to.be.revertedWithCustomError(tokenExclusionManager1, "InvalidId");
       });
 
       it("user1(owner) should be able to claim both of his removed tokens", async () => {
@@ -2192,9 +2349,11 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         //As userShare2 is not recorded we will use userShare1 for verification
         let userShare2 = userShare1;
 
-        let totalSupply1 = await tokenExclusionManager1.totalSupplyRecord(1);
+        let totalSupply1 = (await tokenExclusionManager1.removedToken(1))
+          .totalSupply;
 
-        let totalSupply2 = await tokenExclusionManager1.totalSupplyRecord(2);
+        let totalSupply2 = (await tokenExclusionManager1.removedToken(2))
+          .totalSupply;
 
         let userIdxShareRatio1 = BigNumber.from(userShare1)
           .mul(100)
@@ -2204,7 +2363,22 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           .mul(100)
           .div(BigNumber.from(totalSupply2));
 
-        await tokenExclusionManager1.claimRemovedTokens(owner.address);
+        let removedToken1Vault1 = (await tokenExclusionManager1.removedToken(1))
+          .vault;
+
+        let removedToken1Vault2 = (await tokenExclusionManager1.removedToken(2))
+          .vault;
+
+        let token1BalanceBeforeVault = await ERC20.attach(
+          token1ToRemove,
+        ).balanceOf(removedToken1Vault1);
+
+        let token2BalanceBeforeVault = await ERC20.attach(
+          token2ToRemove,
+        ).balanceOf(removedToken1Vault2);
+
+        await tokenExclusionManager1.claimRemovedTokens(owner.address, 2, 2);
+        await tokenExclusionManager1.claimTokenAtId(owner.address, 1);
 
         let token1BalanceAfter = await ERC20.attach(token1ToRemove).balanceOf(
           owner.address,
@@ -2214,23 +2388,23 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           owner.address,
         );
 
-        let removedToken1Balance = (
-          await tokenExclusionManager1.removedToken(1)
-        ).balanceAtRemoval;
+        let token1BalanceAfterVault = await ERC20.attach(
+          token1ToRemove,
+        ).balanceOf(removedToken1Vault1);
 
-        let removedToken2Balance = (
-          await tokenExclusionManager1.removedToken(2)
-        ).balanceAtRemoval;
+        let token2BalanceAfterVault = await ERC20.attach(
+          token2ToRemove,
+        ).balanceOf(removedToken1Vault2);
 
-        let userRemovedToken1Ratio = BigNumber.from(token1BalanceAfter)
-          .sub(BigNumber.from(token1BalanceBefore))
+        let userRemovedToken1Ratio = BigNumber.from(token1BalanceBeforeVault)
+          .sub(BigNumber.from(token1BalanceAfterVault))
           .mul(100)
-          .div(BigNumber.from(removedToken1Balance));
+          .div(BigNumber.from(token1BalanceBeforeVault));
 
-        let userRemovedToken2Ratio = BigNumber.from(token2BalanceAfter)
-          .sub(BigNumber.from(token2BalanceBefore))
+        let userRemovedToken2Ratio = BigNumber.from(token2BalanceBeforeVault)
+          .sub(BigNumber.from(token2BalanceAfterVault))
           .mul(100)
-          .div(BigNumber.from(removedToken2Balance));
+          .div(BigNumber.from(token2BalanceBeforeVault));
 
         expect(token1BalanceAfter).to.be.greaterThan(token1BalanceBefore);
         expect(token2BalanceAfter).to.be.greaterThan(token2BalanceBefore);
@@ -2253,13 +2427,297 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           owner.address,
         );
 
-        await tokenExclusionManager1.claimRemovedTokens(owner.address);
+        await tokenExclusionManager1.claimTokenAtId(owner.address, 2);
 
         let tokenBalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
           owner.address,
         );
 
         expect(tokenBalanceAfter).to.be.equals(tokenBalanceBefore);
+      });
+
+      it("assetManager should create 2 snapshot(remove 2 tokens) simultaneously for 2nd Portfolio Fund", async () => {
+        await rebalancing1
+          .connect(nonOwner)
+          .removePortfolioToken(addresses.USDCe);
+        await rebalancing1
+          .connect(nonOwner)
+          .removePortfolioToken(addresses.LINK);
+        await rebalancing1
+          .connect(nonOwner)
+          .removePortfolioToken(addresses.DAI);
+        await rebalancing1
+          .connect(nonOwner)
+          .removePortfolioToken(addresses.USDT);
+        await rebalancing1
+          .connect(nonOwner)
+          .removePortfolioToken(addresses.SUSHI);
+      });
+
+      it("addr2 should claim all 7 tokens", async () => {
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+
+        const token1Removed = addresses.WBTC;
+        const token2Removed = addresses.ARB;
+        const token3Removed = addresses.USDCe;
+        const token4Removed = addresses.LINK;
+        const token5Removed = addresses.DAI;
+        const token6Removed = addresses.USDT;
+        const token7Removed = addresses.SUSHI;
+
+        //1-3
+        //6-7
+        //4
+
+        let userShare1 = (
+          await tokenExclusionManager1.userRecord(addr2.address, 1)
+        ).portfolioBalance;
+
+        let totalSupply1 = (await tokenExclusionManager1.removedToken(1))
+          .totalSupply;
+
+        let userIdxShareRatio1 = BigNumber.from(userShare1)
+          .mul(100)
+          .div(BigNumber.from(totalSupply1));
+
+        let token1BalanceBefore = await ERC20.attach(token1Removed).balanceOf(
+          addr2.address,
+        );
+
+        let token2BalanceBefore = await ERC20.attach(token2Removed).balanceOf(
+          addr2.address,
+        );
+
+        let token3BalanceBefore = await ERC20.attach(token3Removed).balanceOf(
+          addr2.address,
+        );
+
+        let token4BalanceBefore = await ERC20.attach(token4Removed).balanceOf(
+          addr2.address,
+        );
+
+        let token5BalanceBefore = await ERC20.attach(token5Removed).balanceOf(
+          addr2.address,
+        );
+
+        let token6BalanceBefore = await ERC20.attach(token6Removed).balanceOf(
+          addr2.address,
+        );
+
+        let token7BalanceBefore = await ERC20.attach(token7Removed).balanceOf(
+          addr2.address,
+        );
+
+        //Claiming Token At Id 5
+        await tokenExclusionManager1.claimTokenAtId(addr2.address, 5);
+
+        let token5BalanceAfter = await ERC20.attach(token5Removed).balanceOf(
+          addr2.address,
+        );
+
+        let userShare6 = (
+          await tokenExclusionManager1.userRecord(addr2.address, 6)
+        ).portfolioBalance;
+
+        let totalSupply6 = (await tokenExclusionManager1.removedToken(6))
+          .totalSupply;
+
+        let userIdxShareRatio6 = BigNumber.from(userShare6)
+          .mul(100)
+          .div(BigNumber.from(totalSupply6));
+
+        let removedTokenVault1 = (await tokenExclusionManager1.removedToken(1))
+          .vault;
+
+        let tokenBalanceBeforeVault1 = await ERC20.attach(
+          token1Removed,
+        ).balanceOf(removedTokenVault1);
+
+        //Claiming Token From Id 1 To 3
+        await tokenExclusionManager1.claimRemovedTokens(addr2.address, 1, 3);
+
+        let token1BalanceAfter = await ERC20.attach(token1Removed).balanceOf(
+          addr2.address,
+        );
+
+        let token2BalanceAfter = await ERC20.attach(token2Removed).balanceOf(
+          addr2.address,
+        );
+
+        let token3BalanceAfter = await ERC20.attach(token3Removed).balanceOf(
+          addr2.address,
+        );
+
+        let userShare4 = (
+          await tokenExclusionManager1.userRecord(addr2.address, 4)
+        ).portfolioBalance;
+
+        let totalSupply4 = (await tokenExclusionManager1.removedToken(4))
+          .totalSupply;
+
+        let userIdxShareRatio4 = BigNumber.from(userShare4)
+          .mul(100)
+          .div(BigNumber.from(totalSupply4));
+
+        let removedTokenVault6 = (await tokenExclusionManager1.removedToken(6))
+          .vault;
+
+        let tokenBalanceBeforeVault6 = await ERC20.attach(
+          token6Removed,
+        ).balanceOf(removedTokenVault6);
+
+        //Claiming Token From Id 6 To 7
+        await tokenExclusionManager1.claimRemovedTokens(addr2.address, 6, 7);
+
+        let token6BalanceAfter = await ERC20.attach(token6Removed).balanceOf(
+          addr2.address,
+        );
+
+        let token7BalanceAfter = await ERC20.attach(token7Removed).balanceOf(
+          addr2.address,
+        );
+
+        let removedTokenVault4 = (await tokenExclusionManager1.removedToken(4))
+          .vault;
+
+        let tokenBalanceBeforeVault4 = await ERC20.attach(
+          token4Removed,
+        ).balanceOf(removedTokenVault4);
+
+        //Claiming Token At Id 4
+        await tokenExclusionManager1.claimTokenAtId(addr2.address, 4);
+
+        let token4BalanceAfter = await ERC20.attach(token4Removed).balanceOf(
+          addr2.address,
+        );
+
+        let tokenBalanceAfterVault1 = await ERC20.attach(
+          token1Removed,
+        ).balanceOf(removedTokenVault1);
+
+        let tokenBalanceAfterVault4 = await ERC20.attach(
+          token4Removed,
+        ).balanceOf(removedTokenVault4);
+
+        let tokenBalanceAfterVault6 = await ERC20.attach(
+          token6Removed,
+        ).balanceOf(removedTokenVault6);
+
+        let userRemovedToken1Ratio = BigNumber.from(tokenBalanceBeforeVault1)
+          .sub(BigNumber.from(tokenBalanceAfterVault1))
+          .mul(100)
+          .div(BigNumber.from(tokenBalanceBeforeVault1));
+
+        console.log("userRemovedToken1Ratio", userRemovedToken1Ratio);
+
+        let userRemovedToken4Ratio = BigNumber.from(tokenBalanceBeforeVault4)
+          .sub(BigNumber.from(tokenBalanceAfterVault4))
+          .mul(100)
+          .div(BigNumber.from(tokenBalanceBeforeVault4));
+
+        let userRemovedToken6Ratio = BigNumber.from(tokenBalanceBeforeVault6)
+          .sub(BigNumber.from(tokenBalanceAfterVault6))
+          .mul(100)
+          .div(BigNumber.from(tokenBalanceBeforeVault6));
+
+        expect(token1BalanceAfter).to.be.greaterThan(token1BalanceBefore);
+        expect(token2BalanceAfter).to.be.greaterThan(token2BalanceBefore);
+        expect(token3BalanceAfter).to.be.greaterThan(token3BalanceBefore);
+        expect(token4BalanceAfter).to.be.greaterThan(token4BalanceBefore);
+        expect(token5BalanceAfter).to.be.greaterThan(token5BalanceBefore);
+        expect(token6BalanceAfter).to.be.greaterThan(token6BalanceBefore);
+        expect(token7BalanceAfter).to.be.greaterThan(token7BalanceBefore);
+        expect(userRemovedToken4Ratio).to.be.equals(userIdxShareRatio4);
+        expect(userRemovedToken6Ratio).to.be.equals(userIdxShareRatio6);
+        expect(userRemovedToken1Ratio).to.be.equals(userIdxShareRatio1);
+      });
+
+      it("assetManager should remove last token from portfoliio", async () => {
+        await rebalancing1
+          .connect(nonOwner)
+          .removePortfolioToken(addresses.USDC);
+      });
+
+      it("addr2 should be able to claim last token", async () => {
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+
+        let tokenRemoved = addresses.USDC;
+
+        let tokenBalanceBefore = await ERC20.attach(tokenRemoved).balanceOf(
+          addr2.address,
+        );
+
+        let userShare = (
+          await tokenExclusionManager1.userRecord(addr2.address, 8)
+        ).portfolioBalance;
+
+        let totalSupply = (await tokenExclusionManager1.removedToken(8))
+          .totalSupply;
+
+        let userIdxShareRatio = BigNumber.from(userShare)
+          .mul(100)
+          .div(BigNumber.from(totalSupply));
+
+        let removedTokenVault = (await tokenExclusionManager1.removedToken(8))
+          .vault;
+
+        let tokenBalanceBeforeVault = await ERC20.attach(
+          tokenRemoved,
+        ).balanceOf(removedTokenVault);
+
+        await tokenExclusionManager1.claimTokenAtId(addr2.address, 8);
+
+        let tokenBalanceAfter = await ERC20.attach(tokenRemoved).balanceOf(
+          addr2.address,
+        );
+
+        let tokenBalanceAfterVault = await ERC20.attach(tokenRemoved).balanceOf(
+          removedTokenVault,
+        );
+
+        let userRemovedTokenRatio = BigNumber.from(tokenBalanceBeforeVault)
+          .sub(BigNumber.from(tokenBalanceAfterVault))
+          .mul(100)
+          .div(BigNumber.from(tokenBalanceBeforeVault));
+
+        expect(tokenBalanceAfter).to.be.greaterThan(tokenBalanceBefore);
+        expect(userRemovedTokenRatio).to.be.equals(userIdxShareRatio);
+      });
+
+      it("addr2 should not be able to claim token if already claimed", async () => {
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+
+        let tokenRemoved = addresses.DAI;
+
+        let tokenBalanceBefore = await ERC20.attach(tokenRemoved).balanceOf(
+          addr2.address,
+        );
+
+        await tokenExclusionManager1.claimTokenAtId(addr2.address, 5);
+
+        let tokenBalanceAfter = await ERC20.attach(tokenRemoved).balanceOf(
+          addr2.address,
+        );
+
+        expect(tokenBalanceAfter).to.be.equals(tokenBalanceBefore);
+      });
+
+      it("old user(owner) should be able to claim removed tokens", async () => {
+        let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+
+        let tokenRemoved = addresses.DAI;
+
+        let tokenBalanceBefore = await ERC20.attach(tokenRemoved).balanceOf(
+          owner.address,
+        );
+
+        await tokenExclusionManager1.claimTokenAtId(owner.address, 5);
+
+        let tokenBalanceAfter = await ERC20.attach(tokenRemoved).balanceOf(
+          owner.address,
+        );
+
+        expect(tokenBalanceAfter).to.be.greaterThan(tokenBalanceBefore);
       });
     });
   });

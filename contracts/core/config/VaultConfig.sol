@@ -23,9 +23,6 @@ abstract contract VaultConfig is AccessModifiers, ChecksAndValidations {
   address public vault;
   address public safeModule;
 
-  // Current snapshot ID, used for versioning of token updates.
-  uint256 public _currentSnapshotId;
-
   // Mapping to track tokens provided by asset managers during updates.
   mapping(address => bool) internal _previousToken;
 
@@ -43,10 +40,14 @@ abstract contract VaultConfig is AccessModifiers, ChecksAndValidations {
     address indexed user,
     uint256 indexed burnedAmount,
     address indexed portfolio,
+    address[] portfolioTokens,
     uint256 userBalanceAfterWithdrawal,
     uint256[] userWithdrawalAmounts
   );
-  event UserDepositedAmounts(uint256[] depositedAmounts);
+  event UserDepositedAmounts(
+    uint256[] depositedAmounts,
+    address[] portfolioTokens
+  );
 
   // Initializes the vault with addresses of the vault and safe module.
   function __VaultConfig_init(

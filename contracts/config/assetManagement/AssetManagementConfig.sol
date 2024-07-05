@@ -16,7 +16,6 @@ import {AccessRoles} from "../../access/AccessRoles.sol";
 
 import {IAccessController} from "../../access/IAccessController.sol";
 
-
 /**
  * @title MainContract
  * @dev Main contract integrating all management functionalities with access control.
@@ -70,12 +69,11 @@ contract AssetManagementConfig is
       initData._managementFee,
       initData._performanceFee,
       initData._entryFee,
-      initData._exitFee
+      initData._exitFee,
+      initData._feeModule
     );
 
-    __UserWhitelistManagement_init(
-      initData._protocolConfig
-    );
+    __UserWhitelistManagement_init(initData._protocolConfig);
   }
 
   // Override the onlyOwner modifier to specify it overrides from OwnableUpgradeable.

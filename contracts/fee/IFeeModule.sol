@@ -18,8 +18,15 @@ interface IFeeModule {
 
   /**
    * @dev Charges and mints protocol and management fees based on current configurations and token supply.
+   * Can only be called by the portfolio manager.
    */
-  function _chargeProtocolAndManagementFees() external;
+  function chargeProtocolAndManagementFeesProtocol() external;
+
+  /**
+   * @dev Calculates and mints performance fees based on the vault's performance relative to a high watermark.
+   * Can only be called by the asset manager when the protocol is not in emergency pause.
+   */
+  function chargeProtocolAndManagementFees() external;
 
   /**
    * @dev Charges entry or exit fees based on a specified percentage, adjusting the mint amount accordingly.
@@ -49,4 +56,22 @@ interface IFeeModule {
    * @param _currentPrice Current price of the portfolio token in USD.
    */
   function updateHighWaterMark(uint256 _currentPrice) external;
+
+  /**
+   * @notice Resets the high watermark for the portfolio to zero.
+   * @dev This function can only be called by the portfolio manager. The high watermark represents the highest value
+   * the portfolio has reached and is used for calculating performance fees. Resetting it to zero can be used for
+   * specific scenarios, such as the start of a new performance period.
+   */
+  function resetHighWaterMark() external;
+
+  function highWatermark() external view returns (uint256);
+
+  function managementFee() external view returns (uint256);
+
+  function performanceFee() external view returns (uint256);
+
+  function entryFee() external view returns (uint256);
+
+  function exitFee() external view returns (uint256);
 }
