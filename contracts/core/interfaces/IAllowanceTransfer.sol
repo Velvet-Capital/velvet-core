@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.17;
 
 import {IEIP712} from "./IEIP712.sol";
@@ -35,8 +35,12 @@ interface IAllowanceTransfer is IEIP712 {
     uint48 nonce
   );
 
-    /// @notice Emits an event when the owner sets the allowance back to 0 with the lockdown function.
-    event Lockdown(address indexed owner, address indexed token, address indexed spender);
+  /// @notice Emits an event when the owner sets the allowance back to 0 with the lockdown function.
+  event Lockdown(
+    address indexed owner,
+    address indexed token,
+    address indexed spender
+  );
 
   /// @notice The permit data for a token
   struct PermitDetails {

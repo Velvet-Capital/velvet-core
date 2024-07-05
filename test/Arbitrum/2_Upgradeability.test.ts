@@ -152,6 +152,12 @@ describe.only("Tests for Upgradeability", () => {
       const feeModule = await FeeModule.deploy();
       await feeModule.deployed();
 
+      const TokenRemovalVault = await ethers.getContractFactory(
+        "TokenRemovalVault",
+      );
+      const tokenRemovalVault = await TokenRemovalVault.deploy();
+      await tokenRemovalVault.deployed();
+
       const VelvetSafeModule = await ethers.getContractFactory(
         "VelvetSafeModule",
       );
@@ -173,6 +179,7 @@ describe.only("Tests for Upgradeability", () => {
             _baseRebalancingAddres: rebalancingDefult.address,
             _baseAssetManagementConfigAddress: assetManagementConfig.address,
             _feeModuleImplementationAddress: feeModule.address,
+            _baseTokenRemovalVaultImplementation: tokenRemovalVault.address,
             _baseVelvetGnosisSafeModuleAddress: velvetSafeModule.address,
             _gnosisSingleton: addresses.gnosisSingleton,
             _gnosisFallbackLibrary: addresses.gnosisFallbackLibrary,

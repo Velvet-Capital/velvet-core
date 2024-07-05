@@ -2,10 +2,9 @@
 pragma solidity 0.8.17;
 
 import {FeeConfigV3_2} from "./changedDependencies/fee_v3_2/FeeConfigV3_2.sol";
-
 import {FeeCalculations} from "../../fee/FeeCalculations.sol";
-
 import {IPriceOracle} from "../../oracle/IPriceOracle.sol";
+import {ErrorLibrary} from "../../library/ErrorLibrary.sol";
 
 /**
  * @title FeeModule
@@ -69,9 +68,10 @@ contract FeeModuleV3_2 is FeeConfigV3_2, FeeCalculations {
   }
 
   /**
-   * @dev Charges and mints protocol and management fees based on current configurations and token supply.
+   * @dev Internal function to charge and mint protocol and management fees based on current configurations and token supply.
+   * This function calculates the fees to be minted and updates the last fee charged timestamp.
    */
-  function _chargeProtocolAndManagementFees() external {
+  function _chargeProtocolAndManagementFees() internal nonReentrant {
     uint256 _managementFee = assetManagementConfig.managementFee();
     uint256 _protocolFee = protocolConfig.protocolFee();
     uint256 _protocolStreamingFee = protocolConfig.protocolStreamingFee();
@@ -107,6 +107,28 @@ contract FeeModuleV3_2 is FeeConfigV3_2, FeeCalculations {
       protocolFeeToMint,
       assetManagerFeeToMint
     );
+  }
+
+  /**
+   * @dev External function to charge and mint protocol and management fees.
+   * Can only be called by the portfolio manager.
+   */
+  function chargeProtocolAndManagementFeesProtocol()
+    external
+    onlyPortfolioManager
+  {
+    _chargeProtocolAndManagementFees();
+  }
+
+  /**
+   * @notice External function to charge protocol and management fees.
+   * Can only be called when the protocol is not in emergency pause.
+   */
+  function chargeProtocolAndManagementFees()
+    external
+    protocolNotEmergencyPaused
+  {
+    _chargeProtocolAndManagementFees();
   }
 
   /**
@@ -166,5 +188,16 @@ contract FeeModuleV3_2 is FeeConfigV3_2, FeeCalculations {
     _updateHighWaterMark(
       _getCurrentPrice(vaultBalance, portfolio.totalSupply())
     );
+  }
+
+  /**
+   * @notice Modifier to restrict function execution if the protocol is in emergency pause.
+   * Uses the `isProtocolEmergencyPaused` function to determine the protocol's pause status.
+   * @dev Reverts with a ProtocolEmergencyPaused error if the protocol is paused.
+   */
+  modifier protocolNotEmergencyPaused() {
+    if (protocolConfig.isProtocolEmergencyPaused())
+      revert ErrorLibrary.ProtocolEmergencyPaused();
+    _; // Continues function execution if the protocol is not paused
   }
 }

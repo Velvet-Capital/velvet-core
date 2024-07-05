@@ -19,9 +19,7 @@ import {FunctionParameters} from "../FunctionParameters.sol";
 
 interface IRebalancing {
   event UpdatedWeights();
-  event UpdatedTokens(
-    address[] indexed newTokens
-  );
+  event UpdatedTokens(address[] newTokens);
 
   function init(IPortfolio _portfolio, address _accessController) external;
 

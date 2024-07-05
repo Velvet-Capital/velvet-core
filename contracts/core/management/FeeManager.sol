@@ -32,7 +32,7 @@ abstract contract FeeManager is AccessModifiers, Dependencies {
         _user == protocolConfig().velvetTreasury())
     ) {
       // Invoke the fee module to charge both protocol and management fees.
-      feeModule()._chargeProtocolAndManagementFees();
+      feeModule().chargeProtocolAndManagementFeesProtocol();
     }
   }
 }

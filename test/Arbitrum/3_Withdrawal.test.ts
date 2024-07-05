@@ -135,6 +135,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
       const feeModule = await FeeModule.deploy();
       await feeModule.deployed();
 
+      const TokenRemovalVault = await ethers.getContractFactory(
+        "TokenRemovalVault",
+      );
+      const tokenRemovalVault = await TokenRemovalVault.deploy();
+      await tokenRemovalVault.deployed();
+
       const VelvetSafeModule = await ethers.getContractFactory(
         "VelvetSafeModule",
       );
@@ -156,6 +162,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             _baseRebalancingAddres: rebalancingDefult.address,
             _baseAssetManagementConfigAddress: assetManagementConfig.address,
             _feeModuleImplementationAddress: feeModule.address,
+            _baseTokenRemovalVaultImplementation: tokenRemovalVault.address,
             _baseVelvetGnosisSafeModuleAddress: velvetSafeModule.address,
             _gnosisSingleton: addresses.gnosisSingleton,
             _gnosisFallbackLibrary: addresses.gnosisFallbackLibrary,
@@ -663,6 +670,16 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         console.log("supplyAfter", supplyAfter);
       });
 
+      it("charge performance fee should fail if caller is not asset manager", async () => {
+        await expect(
+          feeModule0.connect(nonOwner).chargePerformanceFee(),
+        ).to.be.revertedWithCustomError(feeModule0, "CallerNotAssetManager");
+      });
+
+      it("should charge protocol and management fee", async () => {
+        await feeModule0.chargeProtocolAndManagementFees();
+      });
+
       it("should not be able to witdraw if idx token is less then minPortfolioTokenHoldingAmount and not zero", async () => {
         await ethers.provider.send("evm_increaseTime", [70]);
 
@@ -750,6 +767,18 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
       it("should protocol pause", async () => {
         await protocolConfig.setEmergencyPause(true, false);
+      });
+
+      it("charge performance fee should fail if protocol emergency paused", async () => {
+        await expect(
+          feeModule0.chargePerformanceFee(),
+        ).to.be.revertedWithCustomError(feeModule0, "ProtocolEmergencyPaused");
+      });
+
+      it("charge protocol and management fee should fail if protocol emergency paused", async () => {
+        await expect(
+          feeModule0.chargeProtocolAndManagementFees(),
+        ).to.be.revertedWithCustomError(feeModule0, "ProtocolEmergencyPaused");
       });
 
       it("withdraw in multitoken by owner should fail if protocol is emergency paused", async () => {
@@ -883,13 +912,17 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const token1BalanceBefore = await ERC20.attach(tokens[1]).balanceOf(
           nonOwner.address,
         );
-        const token2BalanceBefore = await ERC20.attach(tokens[2]).balanceOf(
-          nonOwner.address,
-        );
 
         await portfolio
           .connect(nonOwner)
-          .multiTokenWithdrawal(amountPortfolioToken);
+          .approve(owner.address, BigNumber.from(amountPortfolioToken));
+
+        await portfolio.emergencyWithdrawalFor(
+          nonOwner.address,
+          nonOwner.address,
+          amountPortfolioToken,
+          [tokens[0], tokens[1]],
+        );
 
         const supplyAfter = await portfolio.totalSupply();
 
@@ -899,9 +932,6 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const token1BalanceAfter = await ERC20.attach(tokens[1]).balanceOf(
           nonOwner.address,
         );
-        const token2BalanceAfter = await ERC20.attach(tokens[2]).balanceOf(
-          nonOwner.address,
-        );
 
         expect(Number(supplyBefore)).to.be.greaterThan(Number(supplyAfter));
         expect(Number(token0BalanceAfter)).to.be.greaterThan(
@@ -909,9 +939,6 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         );
         expect(Number(token1BalanceAfter)).to.be.greaterThan(
           Number(token1BalanceBefore),
-        );
-        expect(Number(token2BalanceAfter)).to.be.greaterThan(
-          Number(token2BalanceBefore),
         );
         expect(Number(await portfolio.balanceOf(nonOwner.address))).to.be.equal(
           0,
@@ -923,10 +950,6 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         console.log(
           "token1Balance",
           BigNumber.from(token1BalanceAfter).sub(token1BalanceBefore),
-        );
-        console.log(
-          "token2Balance",
-          BigNumber.from(token2BalanceAfter).sub(token2BalanceBefore),
         );
         console.log("supplyAfter", supplyAfter);
       });
@@ -943,6 +966,32 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         );
       });
 
+      it("treasuries withdrawal should fail, if exemption token list is greater then portoflio tokens", async () => {
+        await ethers.provider.send("evm_increaseTime", [70]);
+
+        const amountPortfolioTreasury = await portfolio.balanceOf(
+          treasury.address,
+        );
+
+        let exemptionTokens = [
+          addresses.ARB,
+          addresses.WBTC,
+          addresses.WETH,
+          addresses.DAI,
+          addresses.ADoge,
+          addresses.USDCe,
+        ];
+
+        await expect(
+          portfolio
+            .connect(treasury)
+            .emergencyWithdrawal(amountPortfolioTreasury, exemptionTokens),
+        ).to.be.revertedWithCustomError(
+          portfolio,
+          "InvalidExemptionTokensLength",
+        );
+      });
+
       it("treasuries should withdraw their fee", async () => {
         await ethers.provider.send("evm_increaseTime", [70]);
 
@@ -950,11 +999,30 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const amountPortfolioTreasury = await portfolio.balanceOf(
           treasury.address,
         );
+        const tokens = await portfolio.getTokens();
+        let balanceBefore = [];
+
+        const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
+
+        for (let i = 0; i < 2; i++) {
+          balanceBefore[i] = await ERC20.attach(tokens[i]).balanceOf(
+            treasury.address,
+          );
+        }
+
+        let exemptionTokens = [tokens[2]];
 
         await portfolio
           .connect(treasury)
-          .multiTokenWithdrawal(amountPortfolioTreasury);
+          .emergencyWithdrawal(amountPortfolioTreasury, exemptionTokens);
         const supplyAfter = await portfolio.totalSupply();
+
+        for (let i = 0; i < 2; i++) {
+          let balanceAfter = await ERC20.attach(tokens[i]).balanceOf(
+            treasury.address,
+          );
+          expect(Number(balanceAfter)).to.be.greaterThan(balanceBefore[i]);
+        }
 
         expect(Number(supplyBefore)).to.be.greaterThan(supplyAfter);
       });

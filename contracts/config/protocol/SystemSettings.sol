@@ -16,6 +16,7 @@ abstract contract SystemSettings is OwnableCheck, Initializable {
   uint256 public minInitialPortfolioAmount;
   uint256 public assetLimit;
   uint256 public whitelistLimit;
+  uint256 public allowedDustTolerance;
 
   uint256 public lastUnpausedByUser;
   uint256 public lastEmergencyPaused;
@@ -27,6 +28,7 @@ abstract contract SystemSettings is OwnableCheck, Initializable {
   event MinPortfolioTokenHoldingAmountUpdated(uint256 indexed newAmount);
   event CooldownPeriodUpdated(uint256 indexed newPeriod);
   event MinInitialPortfolioAmountUpdated(uint256 indexed newAmount);
+  event AllowedDustToleranceUpdated(uint256 indexed newDustTolerance);
 
   /**
    * @dev Sets default fee percentages and system limits.
@@ -37,6 +39,7 @@ abstract contract SystemSettings is OwnableCheck, Initializable {
     cooldownPeriod = 1 days;
     assetLimit = 15;
     whitelistLimit = 300;
+    allowedDustTolerance = 10; // equivalent to 0.01%
   }
 
   /**
@@ -144,5 +147,19 @@ abstract contract SystemSettings is OwnableCheck, Initializable {
       revert ErrorLibrary.InvalidMinPortfolioTokenHoldingAmount();
     minPortfolioTokenHoldingAmount = _newAmount;
     emit MinPortfolioTokenHoldingAmountUpdated(_newAmount);
+  }
+
+  /**
+   * @notice This function is to update the dust tolerance accepted by the protocol
+   * @param _allowedDustTolerance new allowed dust tolerance
+   */
+  function updateAllowedDustTolerance(
+    uint256 _allowedDustTolerance
+  ) external onlyProtocolOwner {
+    if (_allowedDustTolerance == 0 || _allowedDustTolerance > 1_000)
+      revert ErrorLibrary.InvalidDustTolerance();
+    allowedDustTolerance = _allowedDustTolerance;
+
+    emit AllowedDustToleranceUpdated(_allowedDustTolerance);
   }
 }

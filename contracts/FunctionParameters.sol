@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.17;
+pragma solidity 0.8.17;
 
 /**
  * @title FunctionParameters
@@ -15,6 +15,7 @@ library FunctionParameters {
    * @param _baseRebalancingAddress Base Rebalancing module address for cloning
    * @param _baseAssetManagementConfigAddress Base AssetManagement Config address for cloning
    * @param _feeModuleImplementationAddress Fee Module implementation contract address
+   * @param  _baseTokenRemovalVaultImplementation Token Removal Vault implementation contract address
    * @param _baseVelvetGnosisSafeModuleAddress Base Gnosis-Safe module address for cloning
    * @param _gnosisSingleton Gnosis Singleton contract address
    * @param _gnosisFallbackLibrary Gnosis Fallback Library address
@@ -29,6 +30,7 @@ library FunctionParameters {
     address _baseRebalancingAddres;
     address _baseAssetManagementConfigAddress;
     address _feeModuleImplementationAddress;
+    address _baseTokenRemovalVaultImplementation;
     address _baseVelvetGnosisSafeModuleAddress;
     address _gnosisSingleton;
     address _gnosisFallbackLibrary;
@@ -123,6 +125,7 @@ library FunctionParameters {
     uint256 _minPortfolioTokenHoldingAmount;
     address _protocolConfig;
     address _accessController;
+    address _feeModule;
     address _assetManagerTreasury;
     address[] _whitelistedTokens;
     bool _publicPortfolio;

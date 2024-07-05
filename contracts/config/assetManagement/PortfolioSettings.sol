@@ -28,12 +28,20 @@ abstract contract PortfolioSettings is AssetManagerCheck, Initializable {
   uint256 public minPortfolioTokenHoldingAmount;
 
   // Events for logging updates to portfolio settings
-  event TransferabilityUpdated(bool indexed _transferable, bool indexed _publicTransfers);
-  event ChangedPortfolioToPublic(address indexed user);
+  event TransferabilityUpdated(
+    bool indexed _transferable,
+    bool indexed _publicTransfers
+  );
+  event ChangedPortfolioToPublic(
+    bool indexed isPublic,
+    bool indexed isTransferableToPublic
+  );
   event MinPortfolioTokenHoldingAmountUpdated(
     uint256 indexed _minPortfolioTokenHoldingAmount
   );
-  event InitialPortfolioAmountUpdated(uint256 indexed _newInitialPortfolioAmount);
+  event InitialPortfolioAmountUpdated(
+    uint256 indexed _newInitialPortfolioAmount
+  );
 
   /**
    * Initializes portfolio settings with values conforming to the protocol configuration.
@@ -95,6 +103,7 @@ abstract contract PortfolioSettings is AssetManagerCheck, Initializable {
         transferableToPublic = _publicTransfer;
       }
     }
+    emit TransferabilityUpdated(transferable, transferableToPublic);
   }
 
   /**
@@ -107,7 +116,6 @@ abstract contract PortfolioSettings is AssetManagerCheck, Initializable {
     bool _publicTransfer
   ) external onlyAssetManager {
     _setTransferability(_transferable, _publicTransfer);
-    emit TransferabilityUpdated(_transferable, _publicTransfer);
   }
 
   /**
@@ -118,7 +126,7 @@ abstract contract PortfolioSettings is AssetManagerCheck, Initializable {
     if (transferable) {
       transferableToPublic = true;
     }
-    emit ChangedPortfolioToPublic(msg.sender);
+    emit ChangedPortfolioToPublic(publicPortfolio, transferableToPublic);
   }
 
   /**

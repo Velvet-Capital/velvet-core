@@ -4,6 +4,7 @@ pragma solidity 0.8.17;
 import {FeeConfig} from "./FeeConfig.sol";
 import {FeeCalculations} from "./FeeCalculations.sol";
 import {IPriceOracle} from "../oracle/IPriceOracle.sol";
+import {ErrorLibrary} from "../library/ErrorLibrary.sol";
 
 /**
  * @title FeeModule
@@ -67,9 +68,10 @@ contract FeeModule is FeeConfig, FeeCalculations {
   }
 
   /**
-   * @dev Charges and mints protocol and management fees based on current configurations and token supply.
+   * @dev Internal function to charge and mint protocol and management fees based on current configurations and token supply.
+   * This function calculates the fees to be minted and updates the last fee charged timestamp.
    */
-  function _chargeProtocolAndManagementFees() external nonReentrant {
+  function _chargeProtocolAndManagementFees() internal nonReentrant {
     uint256 _managementFee = assetManagementConfig.managementFee();
     uint256 _protocolFee = protocolConfig.protocolFee();
     uint256 _protocolStreamingFee = protocolConfig.protocolStreamingFee();
@@ -108,6 +110,28 @@ contract FeeModule is FeeConfig, FeeCalculations {
   }
 
   /**
+   * @dev External function to charge and mint protocol and management fees.
+   * Can only be called by the portfolio manager.
+   */
+  function chargeProtocolAndManagementFeesProtocol()
+    external
+    onlyPortfolioManager
+  {
+    _chargeProtocolAndManagementFees();
+  }
+
+  /**
+   * @notice External function to charge protocol and management fees.
+   * Can only be called when the protocol is not in emergency pause.
+   */
+  function chargeProtocolAndManagementFees()
+    external
+    protocolNotEmergencyPaused
+  {
+    _chargeProtocolAndManagementFees();
+  }
+
+  /**
    * @dev Charges entry or exit fees based on a specified percentage, adjusting the mint amount accordingly.
    * @param _mintAmount The amount being minted or burned, subject to entry/exit fees.
    * @param _fee The fee percentage to apply.
@@ -134,8 +158,14 @@ contract FeeModule is FeeConfig, FeeCalculations {
 
   /**
    * @dev Calculates and mints performance fees based on the vault's performance relative to a high watermark.
+   * Can only be called by the asset manager when the protocol is not in emergency pause.
    */
-  function chargePerformanceFee() external onlyAssetManager nonReentrant {
+  function chargePerformanceFee()
+    external
+    onlyAssetManager
+    protocolNotEmergencyPaused
+    nonReentrant
+  {
     uint256 totalSupply = portfolio.totalSupply();
 
     uint256 vaultBalance = portfolio.getVaultValueInUSD(
@@ -168,5 +198,16 @@ contract FeeModule is FeeConfig, FeeCalculations {
     _updateHighWaterMark(
       _getCurrentPrice(vaultBalance, portfolio.totalSupply())
     );
+  }
+
+  /**
+   * @notice Modifier to restrict function execution if the protocol is in emergency pause.
+   * Uses the `isProtocolEmergencyPaused` function to determine the protocol's pause status.
+   * @dev Reverts with a ProtocolEmergencyPaused error if the protocol is paused.
+   */
+  modifier protocolNotEmergencyPaused() {
+    if (protocolConfig.isProtocolEmergencyPaused())
+      revert ErrorLibrary.ProtocolEmergencyPaused();
+    _; // Continues function execution if the protocol is not paused
   }
 }

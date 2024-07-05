@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.17;
+pragma solidity 0.8.17;
 
 /**
  * @title IProtocolConfig
@@ -200,4 +200,32 @@ interface IProtocolConfig {
   ) external view returns (bool);
 
   function whitelistLimit() external view returns (uint256);
+
+  function allowedDustTolerance() external view returns (uint256);
+
+  // ----- RewardTargetManagement Functions -----
+  /**
+   * @notice Checks if a reward target address is enabled.
+   * @param _rewardTargetAddress The address of the reward target to check.
+   * @return Boolean indicating if the reward target address is enabled.
+   */
+  function isRewardTargetEnabled(
+    address _rewardTargetAddress
+  ) external view returns (bool);
+
+  /**
+   * @notice Enables a reward target address by setting its status to true in the mapping.
+   * @dev This function can only be called by the protocol owner.
+   * @param _rewardTargetAddress The address of the reward target to enable.
+   * @dev Reverts if the provided address is invalid (address(0)).
+   */
+  function enableRewardTarget(address _rewardTargetAddress) external;
+
+  /**
+   * @notice Disables a reward target address by setting its status to false in the mapping.
+   * @dev This function can only be called by the protocol owner.
+   * @param _rewardTargetAddress The address of the reward target to disable.
+   * @dev Reverts if the provided address is invalid (address(0)).
+   */
+  function disableRewardTarget(address _rewardTargetAddress) external;
 }

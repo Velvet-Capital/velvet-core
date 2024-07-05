@@ -175,6 +175,12 @@ describe.only("Tests for Portfolio Config", () => {
       const feeModule = await FeeModule.deploy();
       await feeModule.deployed();
 
+      const TokenRemovalVault = await ethers.getContractFactory(
+        "TokenRemovalVault",
+      );
+      const tokenRemovalVault = await TokenRemovalVault.deploy();
+      await tokenRemovalVault.deployed();
+
       const VelvetSafeModule = await ethers.getContractFactory(
         "VelvetSafeModule",
       );
@@ -196,6 +202,7 @@ describe.only("Tests for Portfolio Config", () => {
             _baseRebalancingAddres: rebalancingDefult.address,
             _baseAssetManagementConfigAddress: assetManagementConfig.address,
             _feeModuleImplementationAddress: feeModule.address,
+            _baseTokenRemovalVaultImplementation: tokenRemovalVault.address,
             _baseVelvetGnosisSafeModuleAddress: velvetSafeModule.address,
             _gnosisSingleton: addresses.gnosisSingleton,
             _gnosisFallbackLibrary: addresses.gnosisFallbackLibrary,
@@ -382,8 +389,70 @@ describe.only("Tests for Portfolio Config", () => {
         );
       });
 
+      it("create portfolio should fail if token whitelisting is enabled but whitelist token array is empty", async () => {
+        await expect(
+          portfolioFactory.connect(nonOwner).createPortfolioCustodial(
+            {
+              _name: "PORTFOLIOLY",
+              _symbol: "IDX",
+              _managementFee: "500",
+              _performanceFee: "2500",
+              _entryFee: "0",
+              _exitFee: "0",
+              _initialPortfolioAmount: "100000000000000000000",
+              _minPortfolioTokenHoldingAmount: "10000000000000000",
+              _assetManagerTreasury: treasury.address,
+              _whitelistedTokens: [],
+              _public: true,
+              _transferable: true,
+              _transferableToPublic: true,
+              _whitelistTokens: true,
+            },
+            [owner.address],
+            1,
+          ),
+        ).to.be.revertedWithCustomError(
+          assetManagementConfig0,
+          "InvalidTokenWhitelistLength",
+        );
+      });
+
       it("should protocol pause", async () => {
         await protocolConfig.setProtocolPause(true);
+      });
+
+      it("claiming reward tokens should fail if protocol is paused", async () => {
+        await expect(
+          rebalancing.claimRewardTokens(
+            addresses.WETH_Address,
+            addresses.WETH_Address,
+            "0x",
+          ),
+        ).to.be.revertedWithCustomError(rebalancing, "ProtocolIsPaused");
+      });
+
+      it("asset manager should not be able to remove portfolio token if protocol is paused", async () => {
+        await expect(
+          rebalancing.removePortfolioToken(addresses.WBTC),
+        ).to.be.revertedWithCustomError(rebalancing, "ProtocolIsPaused");
+      });
+
+      it("asset manager should not be able to remove non-portfolio token if protocol is paused", async () => {
+        await expect(
+          rebalancing.removeNonPortfolioToken(addresses.WBTC),
+        ).to.be.revertedWithCustomError(rebalancing, "ProtocolIsPaused");
+      });
+
+      it("asset manager should not be able to remove portfolio token partially if protocol is paused", async () => {
+        await expect(
+          rebalancing.removePortfolioTokenPartially(addresses.WBTC, "1000"),
+        ).to.be.revertedWithCustomError(rebalancing, "ProtocolIsPaused");
+      });
+
+      it("asset manager should not be able to remove non-portfolio partially token if protocol is paused", async () => {
+        await expect(
+          rebalancing.removeNonPortfolioTokenPartially(addresses.WBTC, "1000"),
+        ).to.be.revertedWithCustomError(rebalancing, "ProtocolIsPaused");
       });
 
       it("create portfolio should fail if protocol is paused", async () => {
@@ -420,6 +489,15 @@ describe.only("Tests for Portfolio Config", () => {
 
         let protocolState = await protocolConfig.isProtocolPaused();
         expect(protocolState).to.be.true;
+      });
+
+      it("claim removed tokens should fail if protocol is emergency paused", async () => {
+        await expect(
+          tokenExclusionManager.claimRemovedTokens(owner.address, 1, 2),
+        ).to.be.revertedWithCustomError(
+          tokenExclusionManager,
+          "ProtocolIsPaused",
+        );
       });
 
       it("unpause protocol when emergency paused should fail", async () => {
@@ -969,10 +1047,7 @@ describe.only("Tests for Portfolio Config", () => {
       it("should fail if owner tried to input previous value as new value while updating protocol fee", async () => {
         await expect(
           protocolConfig.updateProtocolFee("2000"),
-        ).to.be.revertedWithCustomError(
-          protocolConfig,
-          "InvalidProtocolFee",
-        );
+        ).to.be.revertedWithCustomError(protocolConfig, "InvalidProtocolFee");
       });
 
       it("owner should be able to update the protocol fee", async () => {
@@ -989,6 +1064,49 @@ describe.only("Tests for Portfolio Config", () => {
 
       it("should unpause protocol", async () => {
         await protocolConfig.setProtocolPause(false);
+      });
+
+      it("claiming reward tokens should fail if reward target is not enabled", async () => {
+        await expect(
+          rebalancing.claimRewardTokens(addresses.WETH, addresses.WETH, "0x"),
+        ).to.be.revertedWithCustomError(rebalancing, "RewardTargetNotEnabled");
+      });
+
+      it("non protocol owner should not be able to enable reward target", async () => {
+        await expect(
+          protocolConfig.connect(nonOwner).enableRewardTarget(addresses.WETH),
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+
+      it("protocol owner should be able to enable reward target", async () => {
+        await expect(protocolConfig.enableRewardTarget(addresses.WETH));
+      });
+
+      it("non protocol owner should not be able to enable reward targets", async () => {
+        await expect(
+          protocolConfig
+            .connect(nonOwner)
+            .enableRewardTargets([addresses.usdtAddress]),
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+
+      it("protocol owner should not be able to enable reward targets passing an empty list", async () => {
+        await expect(
+          protocolConfig.enableRewardTargets([]),
+        ).to.be.revertedWithCustomError(protocolConfig, "InvalidLength");
+      });
+
+      it("protocol owner should be able to enable reward target", async () => {
+        await expect(
+          protocolConfig.enableRewardTargets([addresses.usdtAddress]),
+        );
+      });
+
+      it("reward token target should be usable to claim after enabling", async () => {
+        // empty calldata is passed, test case with calldata in file 4
+        await expect(
+          rebalancing.claimRewardTokens(addresses.WETH, addresses.WETH, "0x"),
+        ).to.be.revertedWithCustomError(rebalancing, "ClaimFailed");
       });
 
       it("should retrieve the current max asset limit from the ProtocolConfig", async () => {
@@ -1631,7 +1749,7 @@ describe.only("Tests for Portfolio Config", () => {
 
       it("should fail if snapshot is not taken and user tries to claim", async () => {
         await expect(
-          tokenExclusionManager.claimRemovedTokens(owner.address),
+          tokenExclusionManager.claimRemovedTokens(owner.address, 1, 2),
         ).to.be.revertedWithCustomError(
           tokenExclusionManager,
           "NoTokensRemoved",
@@ -1663,6 +1781,34 @@ describe.only("Tests for Portfolio Config", () => {
 
       it("owner should be able to update the cooldown period", async () => {
         await protocolConfig.setCoolDownPeriod("120");
+      });
+
+      it("owner should not be able to update the allowed dust tolerance with the value 0", async () => {
+        await expect(
+          protocolConfig.updateAllowedDustTolerance("0"),
+        ).to.be.revertedWithCustomError(protocolConfig, "InvalidDustTolerance");
+      });
+
+      it("owner should not be able to update the allowed dust tolerance with the value 10_000", async () => {
+        await expect(
+          protocolConfig.updateAllowedDustTolerance("10000"),
+        ).to.be.revertedWithCustomError(protocolConfig, "InvalidDustTolerance");
+      });
+
+      it("owner should be able to update the allowed dust tolerance", async () => {
+        await protocolConfig.updateAllowedDustTolerance("200");
+      });
+
+      it("non-owner should not be able to update the token removal vault module base address", async () => {
+        await expect(
+          portfolioFactory
+            .connect(nonOwner)
+            .setTokenRemovalVaultModule(addr1.address),
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+
+      it("owner should be able to update the token removal vault module base address", async () => {
+        await portfolioFactory.setTokenRemovalVaultModule(addr1.address);
       });
     });
   });

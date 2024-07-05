@@ -97,7 +97,13 @@ abstract contract VaultManager is
     uint256 _portfolioTokenAmount
   ) external virtual nonReentrant {
     _spendAllowance(_withdrawFor, msg.sender, _portfolioTokenAmount);
-    _multiTokenWithdrawal(_withdrawFor, _tokenReceiver, _portfolioTokenAmount);
+    address[] memory _emptyArray;
+    _multiTokenWithdrawal(
+      _withdrawFor,
+      _tokenReceiver,
+      _portfolioTokenAmount,
+      _emptyArray
+    );
   }
 
   /**
@@ -107,12 +113,66 @@ abstract contract VaultManager is
   function multiTokenWithdrawal(
     uint256 _portfolioTokenAmount
   ) external virtual nonReentrant {
-    _multiTokenWithdrawal(msg.sender, msg.sender, _portfolioTokenAmount);
+    address[] memory _emptyArray;
+    _multiTokenWithdrawal(
+      msg.sender,
+      msg.sender,
+      _portfolioTokenAmount,
+      _emptyArray
+    );
+  }
+
+  /**
+   * @notice Allows users to perform an emergency withdrawal from the fund, receiving the underlying tokens.
+   * @dev This function enables users to withdraw their portfolio tokens and receive the corresponding underlying tokens.
+   * In the event of a transfer failure for any of the specified exemption tokens, the function will catch the error
+   * and continue processing the remaining tokens, ensuring that the user can retrieve their assets even if some tokens
+   * are non-transferable.
+   * @param _portfolioTokenAmount The amount of portfolio tokens to withdraw.
+   * @param _exemptionTokens An array of token addresses that are exempt from withdrawal if their transfer fails.
+   */
+  function emergencyWithdrawal(
+    uint256 _portfolioTokenAmount,
+    address[] memory _exemptionTokens
+  ) external virtual nonReentrant {
+    _multiTokenWithdrawal(
+      msg.sender,
+      msg.sender,
+      _portfolioTokenAmount,
+      _exemptionTokens
+    );
+  }
+
+  /**
+   * @notice Allows an authorized user to perform an emergency withdrawal on behalf of another user.
+   * @dev This function enables an authorized user to withdraw portfolio tokens on behalf of another user and
+   * send the corresponding underlying tokens to a specified receiver address. If the transfer of any of the
+   * specified exemption tokens fails, the function will catch the error and continue processing the remaining
+   * tokens, ensuring that the assets can be retrieved even if some tokens are non-transferable.
+   * @param _withdrawFor The address of the user on whose behalf the withdrawal is being performed.
+   * @param _tokenReceiver The address that will receive the underlying tokens.
+   * @param _portfolioTokenAmount The amount of portfolio tokens to withdraw.
+   * @param _exemptionTokens An array of token addresses that are exempt from withdrawal if their transfer fails.
+   */
+
+  function emergencyWithdrawalFor(
+    address _withdrawFor,
+    address _tokenReceiver,
+    uint256 _portfolioTokenAmount,
+    address[] memory _exemptionTokens
+  ) external virtual nonReentrant {
+    _spendAllowance(_withdrawFor, msg.sender, _portfolioTokenAmount);
+    _multiTokenWithdrawal(
+      _withdrawFor,
+      _tokenReceiver,
+      _portfolioTokenAmount,
+      _exemptionTokens
+    );
   }
 
   /**
    * @notice Allows the rebalancer contract to pull tokens from the vault.
-   * @dev Wrapper function for `_pullFromVault` ensuring only the rebalancer contract can call it.
+   * @dev Executes a token transfer via the VelvetSafeModule, ensuring secure transaction execution.
    * @param _token The token to be pulled from the vault.
    * @param _amount The amount of the token to pull.
    * @param _to The destination address for the tokens.
@@ -122,7 +182,23 @@ abstract contract VaultManager is
     uint256 _amount,
     address _to
   ) external onlyRebalancerContract {
-    _pullFromVault(_token, _amount, _to);
+    // Prepare the data for ERC20 token transfer
+    bytes memory inputData = abi.encodeWithSelector(
+      IERC20Upgradeable.transfer.selector,
+      _to,
+      _amount
+    );
+
+    // Execute the transfer through the safe module and check for success
+    (, bytes memory data) = IVelvetSafeModule(safeModule).executeWallet(
+      _token,
+      inputData
+    );
+
+    // Ensure the transfer was successful; revert if not
+    if (!(data.length == 0 || abi.decode(data, (bool)))) {
+      revert ErrorLibrary.TransferFailed();
+    }
   }
 
   /**
@@ -219,17 +295,17 @@ abstract contract VaultManager is
     if (_totalSupply == 0) {
       tokenAmount = assetManagementConfig().initialPortfolioAmount();
       // Reset the high watermark to zero if it's not the first deposit.
-      feeModule().updateHighWaterMark(0);
+      feeModule().resetHighWaterMark();
     } else {
       // Calculate the amount of portfolio tokens to mint based on the deposit.
       tokenAmount = _getTokenAmountToMint(_depositRatio, _totalSupply);
     }
 
-    // Ensure the minted amount meets the user's minimum expectation to mitigate slippage.
-    _verifyUserMintedAmount(tokenAmount, _minMintAmount);
-
     // Mint the calculated portfolio tokens to the user, applying any cooldown periods.
     tokenAmount = _mintTokenAndSetCooldown(_depositFor, tokenAmount);
+
+    // Ensure the minted amount meets the user's minimum expectation to mitigate slippage.
+    _verifyUserMintedAmount(tokenAmount, _minMintAmount);
 
     uint256 userBalanceAfterDeposit = balanceOf(_depositFor);
     // Notify listeners of the deposit event.
@@ -249,14 +325,23 @@ abstract contract VaultManager is
   function _multiTokenWithdrawal(
     address _withdrawFor,
     address _tokenReceiver,
-    uint256 _portfolioTokenAmount
+    uint256 _portfolioTokenAmount,
+    address[] memory _exemptionTokens
   ) internal virtual {
+    // Retrieve the list of tokens currently in the portfolio.
+    address[] memory portfolioTokens = tokens;
+
+    uint256 portfolioTokenLength = portfolioTokens.length;
+
     // Perform pre-withdrawal checks, including balance and cooldown verification.
     _beforeWithdrawCheck(
       _withdrawFor,
       IPortfolio(address(this)),
-      _portfolioTokenAmount
+      _portfolioTokenAmount,
+      portfolioTokenLength,
+      _exemptionTokens
     );
+
     // Validate the cooldown period of the user.
     _checkCoolDownPeriod(_withdrawFor);
 
@@ -268,14 +353,12 @@ abstract contract VaultManager is
     // Burn the user's portfolio tokens and calculate the adjusted withdrawal amount post-fees.
     _portfolioTokenAmount = _burnWithdraw(_withdrawFor, _portfolioTokenAmount);
 
-    // Retrieve the list of tokens currently in the portfolio.
-    address[] memory portfolioTokens = tokens;
-    // Calculate and transfer each token's proportional amount back to the user.
-    uint256 portfolioTokenLength = portfolioTokens.length;
     //Array to store, users withdrawal amounts
     uint256[] memory userWithdrawalAmounts = new uint256[](
       portfolioTokenLength
     );
+
+    uint256 exemptionIndex = 0;
     for (uint256 i; i < portfolioTokenLength; i++) {
       address _token = portfolioTokens[i];
       // Calculate the proportion of each token to return based on the burned portfolio tokens.
@@ -284,11 +367,30 @@ abstract contract VaultManager is
         (tokenBalance * _portfolioTokenAmount) /
         totalSupplyPortfolio;
 
-      if (tokenBalance == 0) revert ErrorLibrary.WithdrawalAmountIsSmall();
+      // Prepare the data for ERC20 token transfer
+      bytes memory inputData = abi.encodeWithSelector(
+        IERC20Upgradeable.transfer.selector,
+        _tokenReceiver,
+        tokenBalance
+      );
 
-      userWithdrawalAmounts[i] = tokenBalance;
-      // Transfer each token's proportional amount from the vault to the user.
-      _pullFromVault(_token, tokenBalance, _tokenReceiver);
+      // Execute the transfer through the safe module and check for success
+      try IVelvetSafeModule(safeModule).executeWallet(_token, inputData) {
+        // Check if the token balance is zero and the current token is not an exemption token, revert with an error.
+        // This check is necessary because if there is any rebase token or the protocol sets the balance to zero,
+        // we need to be able to withdraw other tokens. The balance for a withdrawal should always be >0,
+        // except when the user accepts to lose this token.
+        if (tokenBalance == 0 && _exemptionTokens[exemptionIndex] != _token)
+          revert ErrorLibrary.WithdrawalAmountIsSmall();
+        userWithdrawalAmounts[i] = tokenBalance;
+      } catch {
+        //Checking if exception token was mentioned in exceptionToken array
+        if (_exemptionTokens[exemptionIndex] != _token) {
+          revert ErrorLibrary.InvalidExemptionTokens();
+        }
+        userWithdrawalAmounts[i] = 0;
+        exemptionIndex++;
+      }
     }
 
     uint256 userBalanceAfterWithdrawal = balanceOf(_withdrawFor);
@@ -298,40 +400,10 @@ abstract contract VaultManager is
       _withdrawFor,
       _portfolioTokenAmount,
       address(this),
+      portfolioTokens,
       userBalanceAfterWithdrawal,
       userWithdrawalAmounts
     );
-  }
-
-  /**
-   * @notice Transfers specified token amount from the vault to a given address.
-   * @dev Executes a token transfer via the VelvetSafeModule, ensuring secure transaction execution.
-   * @param _token The token address to transfer.
-   * @param _amount The amount of tokens to transfer.
-   * @param _to The recipient address of the tokens.
-   */
-  function _pullFromVault(
-    address _token,
-    uint256 _amount,
-    address _to
-  ) internal {
-    // Prepare the data for ERC20 token transfer
-    bytes memory inputData = abi.encodeWithSelector(
-      IERC20Upgradeable.transfer.selector,
-      _to,
-      _amount
-    );
-
-    // Execute the transfer through the safe module and check for success
-    (, bytes memory data) = IVelvetSafeModule(safeModule).executeWallet(
-      _token,
-      inputData
-    );
-
-    // Ensure the transfer was successful; revert if not
-    if (!(data.length == 0 || abi.decode(data, (bool)))) {
-      revert ErrorLibrary.TransferFailed();
-    }
   }
 
   /**
@@ -345,7 +417,12 @@ abstract contract VaultManager is
     address _token,
     uint256 _depositAmount
   ) internal {
-    permit2.transferFrom(_from, vault, uint160(_depositAmount), _token);
+    permit2.transferFrom(
+      _from,
+      vault,
+      MathUtils.safe160(_depositAmount),
+      _token
+    );
   }
 
   /**
@@ -381,7 +458,20 @@ abstract contract VaultManager is
       uint256[] memory tokenBalancesBefore
     ) = _validateAndGetBalances(depositAmounts);
 
-    permit2.permit(msg.sender, _permit, _signature);
+    try permit2.permit(msg.sender, _permit, _signature) {
+      // No further implementation needed if permit succeeds
+    } catch {
+      // Check allowance for each token in depositAmounts array
+      uint256 depositAmountsLength = depositAmounts.length;
+      for (uint256 i; i < depositAmountsLength; i++) {
+        if (
+          IERC20Upgradeable(portfolioTokens[i]).allowance(
+            msg.sender,
+            address(this)
+          ) < depositAmounts[i]
+        ) revert ErrorLibrary.InsufficientAllowance();
+      }
+    }
 
     // Handles the token transfer and minRatio calculations
     return
@@ -483,7 +573,15 @@ abstract contract VaultManager is
         } else {
           _transferToVault(_from, portfolioTokens[i], depositAmount);
         }
+        uint256 tokenBalanceAfter = _getTokenBalanceOf(
+          portfolioTokens[i],
+          vault
+        );
+
+        if (!(tokenBalanceAfter > tokenBalancesBefore[i]))
+          revert ErrorLibrary.TransferFailed();
       }
+      emit UserDepositedAmounts(depositedAmounts, portfolioTokens);
       return 0;
     }
 
@@ -520,7 +618,7 @@ abstract contract VaultManager is
         _minRatioAfterTransfer
       );
     }
-    emit UserDepositedAmounts(depositedAmounts);
+    emit UserDepositedAmounts(depositedAmounts, portfolioTokens);
     return _minRatioAfterTransfer;
   }
 }

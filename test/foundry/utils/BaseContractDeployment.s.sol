@@ -12,6 +12,7 @@ import {AssetManagementConfig} from "../../../../contracts/config/assetManagemen
 
 import {FeeModule} from "../../../../contracts/fee/FeeModule.sol";
 import {VelvetSafeModule} from "../../../../contracts/vault/VelvetSafeModule.sol";
+import {TokenRemovalVault} from "../../../../contracts/vault/TokenRemovalVault.sol";
 
 contract BaseContractDeployment is Script {
   function deployBaseContracts()
@@ -23,6 +24,7 @@ contract BaseContractDeployment is Script {
       address rebalancing,
       address assetManagementConfig,
       address feeModule,
+      address tokenRemovalVault,
       address safe
     )
   {
@@ -32,6 +34,7 @@ contract BaseContractDeployment is Script {
     rebalancing = address(new Rebalancing());
     assetManagementConfig = address(new AssetManagementConfig());
     feeModule = address(new FeeModule());
+    tokenRemovalVault = address(new TokenRemovalVault());
     safe = address(new VelvetSafeModule());
   }
 }

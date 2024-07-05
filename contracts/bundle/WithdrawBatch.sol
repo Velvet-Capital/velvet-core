@@ -6,15 +6,12 @@ import {TransferHelper} from "@uniswap/lib/contracts/libraries/TransferHelper.so
 import {IAllowanceTransfer} from "../core/interfaces/IAllowanceTransfer.sol";
 import {ErrorLibrary} from "../library/ErrorLibrary.sol";
 import {IPortfolio} from "../core/interfaces/IPortfolio.sol";
-import {FunctionParameters} from "../FunctionParameters.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 /**
- * @title WithdrawHandler
- * @dev This contract facilitates batching multiple transactions for users, providing a seamless experience.
- * It withdraws users vault token to contract and swaps multiple tokens to single token (chosen by user) using enso and send it to user,
- * if token to swap into is the same as users desired token then it simply transfers the token balance of contract. Finally, any leftover
- * dust is also returned to the user
+ * @title WithdrawBatch
+ * @notice A contract for performing multi-token swap and withdrawal operations.
+ * @dev This contract uses Enso's swap execution logic for delegating swaps.
  */
 contract WithdrawBatch is ReentrancyGuard {
   // The address of Enso's swap execution logic; swaps are delegated to this target.
@@ -22,31 +19,33 @@ contract WithdrawBatch is ReentrancyGuard {
   address constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
   /**
-   * @notice Performs a multi-token withdrawal and swap operation for the user.
-   * @param _target Adress of portfolio contract to withdraw from
-   * @param _tokenToWithdraw Address of token user needs(will receive)
-   * @param _portfolioTokenAmount The amount of portfolio tokens to withdraw
-   * @param _callData Encoded call data for swap operation
+   * @notice Executes a multi-token swap and withdrawal process, sending the resulting tokens to the user.
+   * @dev This function performs the following steps:
+   * 1. Gets the list of tokens from the specified portfolio.
+   * 2. Checks the balance of the user for the token to withdraw before the swap.
+   * 3. Executes a multi-token withdrawal from the portfolio.
+   * 4. Swaps the tokens and transfers them to the user.
+   * 5. Handles any remaining token balances and transfers them back to the user.
+   * @param _target The address of the portfolio contract.
+   * @param _tokenToWithdraw The address of the token to be withdrawn by the user.
+   * @param user The address of the user initiating the withdrawal.
+   * @param _callData The calldata required for executing the swaps.
    */
   function multiTokenSwapAndWithdraw(
     address _target,
     address _tokenToWithdraw,
-    uint256 _portfolioTokenAmount,
+    address user,
     bytes[] memory _callData
   ) external nonReentrant {
     address[] memory tokens = IPortfolio(_target).getTokens();
     uint256 tokenLength = tokens.length;
-    address user = msg.sender;
     uint256 balanceOfSameToken;
 
     if (_callData.length != tokenLength) revert ErrorLibrary.InvalidLength();
 
-    uint256 userBalanceBeforeSwap = _getTokenBalanceOfUser(_tokenToWithdraw, user);
-
-    IPortfolio(_target).multiTokenWithdrawalFor(
-      user,
-      address(this),
-      _portfolioTokenAmount
+    uint256 userBalanceBeforeSwap = _getTokenBalanceOfUser(
+      _tokenToWithdraw,
+      user
     );
 
     // Perform swaps and send tokens to user
@@ -61,18 +60,19 @@ contract WithdrawBatch is ReentrancyGuard {
         if (!success) revert ErrorLibrary.CallFailed();
 
         // Return any leftover dust to the user
-        TransferHelper.safeTransfer(
-          _token,
-          user,
-          _getTokenBalance(_token, address(this))
-        );
+        uint256 portfoliodustReturn = _getTokenBalance(_token, address(this));
+        if (portfoliodustReturn > 0) {
+          TransferHelper.safeTransfer(_token, user, portfoliodustReturn);
+        }
       }
     }
 
-    // Subtracting balanceIfSameToken to get the correct amount, to verify that calldata is not manipulated, 
+    // Subtracting balanceIfSameToken to get the correct amount, to verify that calldata is not manipulated,
     // and to ensure the user has received their shares properly
-    uint256 userBalanceAfterSwap = _getTokenBalanceOfUser(_tokenToWithdraw, user) -
-      balanceOfSameToken;
+    uint256 userBalanceAfterSwap = _getTokenBalanceOfUser(
+      _tokenToWithdraw,
+      user
+    ) - balanceOfSameToken;
 
     //Checking balance of user after swap, to confirm recevier is user
     if (userBalanceAfterSwap <= userBalanceBeforeSwap)

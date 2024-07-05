@@ -20,7 +20,7 @@ abstract contract TokenManagement is OwnableCheck, Initializable {
   mapping(address => bool) public isEnabled;
 
   // Event emitted when tokens are enabled.
-  event TokensEnabled(address[] indexed tokens);
+  event TokensEnabled(address[] tokens);
 
   // Event emitted when a token is disabled.
   event TokenDisabled(address indexed token);
