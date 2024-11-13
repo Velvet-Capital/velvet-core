@@ -1,3 +1,9 @@
+## Documentation for integration: 
+https://docs.google.com/document/d/1jtl_WuikJDtpuzBMcuyhbHcgojhRO5gzmiQdd_JJVoU/edit?tab=t.0
+
+## Subgraph: 
+https://github.com/Velvet-Capital/velvet-core-subgraph/tree/graph-setup/velvet-core
+
 ## Running test cases
 
 Install Dependencies:
