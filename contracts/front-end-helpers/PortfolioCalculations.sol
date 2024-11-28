@@ -2,16 +2,16 @@
 
 pragma solidity 0.8.17;
 
-import {IPortfolio} from "../core/interfaces/IPortfolio.sol";
-import {ITokenExclusionManager} from "../core/interfaces/ITokenExclusionManager.sol";
-import {IFeeModule} from "../fee/IFeeModule.sol";
-import {IAssetManagementConfig} from "../config/assetManagement/IAssetManagementConfig.sol";
-import {IProtocolConfig} from "../config/protocol/IProtocolConfig.sol";
-import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
-import {IERC20MetadataUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
-import {IPriceOracle} from "../../contracts/oracle/IPriceOracle.sol";
+import { IPortfolio } from "../core/interfaces/IPortfolio.sol";
+import { ITokenExclusionManager } from "../core/interfaces/ITokenExclusionManager.sol";
+import { IFeeModule } from "../fee/IFeeModule.sol";
+import { IAssetManagementConfig } from "../config/assetManagement/IAssetManagementConfig.sol";
+import { IProtocolConfig } from "../config/protocol/IProtocolConfig.sol";
+import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
+import { IPriceOracle } from "../../contracts/oracle/IPriceOracle.sol";
 
-import {ErrorLibrary} from "../library/ErrorLibrary.sol";
+import { ErrorLibrary } from "../library/ErrorLibrary.sol";
 
 contract PortfolioCalculations {
   uint256 internal constant ONE_ETH_IN_WEI = 10 ** 18;
@@ -443,9 +443,11 @@ contract PortfolioCalculations {
     }
 
     uint256 performanceIncrease = _currentPrice - _highWaterMark;
-    uint256 performanceFee = ((performanceIncrease *
+    uint256 performanceFee = (performanceIncrease *
       _totalSupply *
-      _feePercentage) * ONE_ETH_IN_WEI) / TOTAL_WEIGHT;
+      _feePercentage) /
+      ONE_ETH_IN_WEI /
+      TOTAL_WEIGHT;
 
     tokensToMint =
       (performanceFee * _totalSupply) /
