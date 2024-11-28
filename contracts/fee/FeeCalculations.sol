@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.17;
 
-import {TokenCalculations} from "../core/calculations/TokenCalculations.sol";
-import {FeeEvents} from "./FeeEvents.sol";
+import { TokenCalculations } from "../core/calculations/TokenCalculations.sol";
+import { FeeEvents } from "./FeeEvents.sol";
 
 /**
  * @title FeeCalculations
@@ -188,9 +188,11 @@ contract FeeCalculations is TokenCalculations, FeeEvents {
     }
 
     uint256 performanceIncrease = _currentPrice - _highWaterMark;
-    uint256 performanceFee = ((performanceIncrease *
+    uint256 performanceFee = (performanceIncrease *
       _totalSupply *
-      _feePercentage) * ONE_ETH_IN_WEI) / TOTAL_WEIGHT;
+      _feePercentage) /
+      ONE_ETH_IN_WEI /
+      TOTAL_WEIGHT;
 
     tokensToMint =
       (performanceFee * _totalSupply) /
