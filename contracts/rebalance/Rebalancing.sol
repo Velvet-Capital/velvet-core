@@ -153,46 +153,56 @@ contract Rebalancing is
    * @param rebalanceData The data required for rebalancing, including tokens to sell, new tokens, sell amounts, handler, and call data.
    */
   function updateTokens(
-    FunctionParameters.RebalanceIntent calldata rebalanceData
-  ) external virtual nonReentrant onlyAssetManager {
-    address[] calldata _sellTokens = rebalanceData._sellTokens;
-    address[] calldata _newTokens = rebalanceData._newTokens;
-    address[] memory _tokens = _getCurrentTokens();
+        FunctionParameters.RebalanceIntent calldata rebalanceData
+    ) external virtual nonReentrant onlyAssetManager {
+        address[] calldata _sellTokens = rebalanceData._sellTokens;
+        address[] calldata _newTokens = rebalanceData._newTokens;
+        address[] memory _tokens = _getCurrentTokens();
 
-    //Need a check here to confirm _newTokens has buyTokens in it
-    portfolio.updateTokenList(_newTokens);
+        //Need a check here to confirm _newTokens has buyTokens in it
+        portfolio.updateTokenList(_newTokens);
 
-    // Perform token update and weights adjustment based on provided rebalance data.
-    _updateWeights(
-      _sellTokens,
-      _newTokens,
-      rebalanceData._sellAmounts,
-      rebalanceData._handler,
-      rebalanceData._callData
-    );
+        uint256 tokenLength = _tokens.length;
+        uint256[] memory initialBalances = new uint256[](tokenLength);
+        for (uint256 i; i < tokenLength; i++) {
+            initialBalances[i] = _getTokenBalanceOf(_tokens[i], _vault);
+        }
 
-    // Update the internal mapping to reflect changes in the token list post-rebalance.
-    uint256 tokenLength = _tokens.length;
-    for (uint256 i; i < tokenLength; i++) {
-      tokensMapping[_tokens[i]] = true;
+        // Perform token update and weights adjustment based on provided rebalance data.
+        _updateWeights(
+            _sellTokens,
+            _newTokens,
+            rebalanceData._sellAmounts,
+            rebalanceData._handler,
+            rebalanceData._callData
+        );
+
+        // Update the internal mapping to reflect changes in the token list post-rebalance.
+        for (uint256 i; i < tokenLength; i++) {
+            tokensMapping[_tokens[i]] = true;
+        }
+
+        uint256 newTokensLength = _newTokens.length;
+        for (uint256 i; i < newTokensLength; i++) {
+            tokensMapping[_newTokens[i]] = false;
+        }
+
+        uint256 dustTolerance = protocolConfig.allowedDustTolerance();
+        for (uint256 i; i < tokenLength; i++) {
+            address _portfolioToken = _tokens[i];
+            if (tokensMapping[_portfolioToken]) {
+                uint256 dustValue = (initialBalances[i] * dustTolerance) /
+                    TOTAL_WEIGHT;
+
+                // Verify that the token's balance does not exceed the allowable dust tolerance
+                if (_getTokenBalanceOf(_portfolioToken, _vault) > dustValue)
+                    revert ErrorLibrary.NonPortfolioTokenBalanceIsNotZero();
+            }
+            delete tokensMapping[_portfolioToken];
+        }
+
+        emit UpdatedTokens(_newTokens);
     }
-
-    uint256 newTokensLength = _newTokens.length;
-    for (uint256 i; i < newTokensLength; i++) {
-      tokensMapping[_newTokens[i]] = false;
-    }
-
-    for (uint256 i; i < tokenLength; i++) {
-      address _portfolioToken = _tokens[i];
-      if (tokensMapping[_portfolioToken]) {
-        if (_getTokenBalanceOf(_portfolioToken, _vault) != 0)
-          revert ErrorLibrary.NonPortfolioTokenBalanceIsNotZero();
-      }
-      delete tokensMapping[_portfolioToken];
-    }
-
-    emit UpdatedTokens(_newTokens);
-  }
 
   /**
    * @notice Removes an portfolio token from the portfolio. Can only be called by the asset manager.
