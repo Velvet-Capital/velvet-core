@@ -180,7 +180,19 @@ const config: HardhatUserConfig = {
     timeout: 400000,
   },
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY,
+    apiKey: {
+      baseMainnet: process.env.BASESCAN_API_KEY || "",
+    },
+    customChains: [
+      {
+        network: "baseMainnet",
+        chainId: 8453,
+        urls: {
+          apiURL: "https://api.basescan.org/api", // Base Etherscan API URL
+          browserURL: "https://basescan.org",
+        },
+      },
+    ],
   },
   abiExporter: {
     path: "./abi",
@@ -198,7 +210,7 @@ const config: HardhatUserConfig = {
       "PriceOracleL2",
       "FeeModule",
       "DepositBatch",
-      "WithdrawBatch"
+      "WithdrawBatch",
     ],
     spacing: 2,
   },
