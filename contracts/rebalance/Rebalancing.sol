@@ -125,7 +125,26 @@ contract Rebalancing is
     }
 
     // Ensure that each token bought by the solver is in the portfolio list.
-    _verifyNewTokenList(ensoBuyTokens, _newTokens);
+    uint256 tokenLength = _newTokens.length;
+    for (uint256 i; i < tokenLength; i++) {
+      address token = _newTokens[i];
+      if (_getTokenBalanceOf(token, _vault) == 0)
+        revert ErrorLibrary.BalanceOfVaultCannotNotBeZero(token);
+      tokensMapping[token] = true;
+    }
+
+    // Validate that all tokens bought by the solver are in the list of new tokens.
+    uint256 ensoBuyTokensLength = ensoBuyTokens.length;
+    for (uint256 i; i < ensoBuyTokensLength; i++) {
+      if (!tokensMapping[ensoBuyTokens[i]]) {
+        revert ErrorLibrary.InvalidBuyTokenList();
+      }
+    }
+
+    // Reset the tokens mapping for the new tokens.
+    for (uint256 i; i < tokenLength; i++) {
+      delete tokensMapping[_newTokens[i]];
+    }
   }
 
   /**
@@ -143,29 +162,6 @@ contract Rebalancing is
     //Need a check here to confirm _newTokens has buyTokens in it
     portfolio.updateTokenList(_newTokens);
 
-    // Initialize a bitmap with 256 slots to handle up to 65,536 unique bit positions
-    uint256[256] memory tokenBitmap;
-    uint256 tokenLength = _tokens.length;
-    uint256[] memory initialBalances = new uint256[](tokenLength);
-
-    unchecked{
-     // Populate the bitmap with current tokens and store their initial balances
-      for (uint256 i; i < tokenLength; i++) {
-        address token = _tokens[i];
-
-        // Store the current balance of the token for later verification
-        initialBalances[i] = _getTokenBalanceOf(token, _vault);
-
-        // Calculate a unique bit position for this token
-        uint256 bitPos = uint256(keccak256(abi.encodePacked(token))) % 65536; // Hash to get a unique bit position in the range 0-65,535
-        uint256 index = bitPos / 256; // Determine the specific uint256 slot in the array (0 to 255)
-        uint256 offset = bitPos % 256; // Determine the bit position within that uint256 slot (0 to 255)
-
-        // Set the bit for this token in the bitmap to mark it as present
-        tokenBitmap[index] |= (1 << offset);
-      } 
-    }
-
     // Perform token update and weights adjustment based on provided rebalance data.
     _updateWeights(
       _sellTokens,
@@ -175,55 +171,24 @@ contract Rebalancing is
       rebalanceData._callData
     );
 
-    unchecked {
-      // Populate the bitmap with current tokens and store their initial balances
-      for (uint256 i; i < tokenLength; i++) {
-        address token = _tokens[i];
+    // Update the internal mapping to reflect changes in the token list post-rebalance.
+    uint256 tokenLength = _tokens.length;
+    for (uint256 i; i < tokenLength; i++) {
+      tokensMapping[_tokens[i]] = true;
+    }
 
-        // Store the current balance of the token for later verification
-        initialBalances[i] = _getTokenBalanceOf(token, _vault);
+    uint256 newTokensLength = _newTokens.length;
+    for (uint256 i; i < newTokensLength; i++) {
+      tokensMapping[_newTokens[i]] = false;
+    }
 
-        // Calculate a unique bit position for this token
-        uint256 bitPos = uint256(keccak256(abi.encodePacked(token))) % 65536; // Hash to get a unique bit position in the range 0-65,535
-        uint256 index = bitPos / 256; // Determine the specific uint256 slot in the array (0 to 255)
-        uint256 offset = bitPos % 256; // Determine the bit position within that uint256 slot (0 to 255)
-
-        // Set the bit for this token in the bitmap to mark it as present
-        tokenBitmap[index] |= (1 << offset);
+    for (uint256 i; i < tokenLength; i++) {
+      address _portfolioToken = _tokens[i];
+      if (tokensMapping[_portfolioToken]) {
+        if (_getTokenBalanceOf(_portfolioToken, _vault) != 0)
+          revert ErrorLibrary.NonPortfolioTokenBalanceIsNotZero();
       }
-
-      // Remove new tokens from the bitmap to avoid unnecessary balance checks
-      for (uint256 i; i < _newTokens.length; i++) {
-        uint256 bitPos = uint256(keccak256(abi.encodePacked(_newTokens[i]))) %
-          65536;
-        uint256 index = bitPos / 256;
-        uint256 offset = bitPos % 256;
-
-        // Clear the bit for each new token to mark it as excluded from checks
-        tokenBitmap[index] &= ~(1 << offset);
-      }
-
-      // Verify balances for remaining tokens in the bitmap
-      uint256 dustTolerance = protocolConfig.allowedDustTolerance();
-      for (uint256 i; i < tokenLength; i++) {
-        address token = _tokens[i];
-
-        // Calculate the bit position for this token to verify its presence
-        uint256 bitPos = uint256(keccak256(abi.encodePacked(token))) % 65536;
-        uint256 index = bitPos / 256;
-        uint256 offset = bitPos % 256;
-
-        // Check if the bit for this token is still set in the bitmap
-        if ((tokenBitmap[index] & (1 << offset)) != 0) {
-          // Calculate the allowable "dust" amount based on the initial balance
-          uint256 dustValue = (initialBalances[i] * dustTolerance) /
-            TOTAL_WEIGHT;
-
-          // Verify that the token's balance does not exceed the allowable dust tolerance
-          if (_getTokenBalanceOf(token, _vault) > dustValue)
-            revert ErrorLibrary.NonPortfolioTokenBalanceIsNotZero();
-        }
-      }
+      delete tokensMapping[_portfolioToken];
     }
 
     emit UpdatedTokens(_newTokens);
@@ -236,11 +201,10 @@ contract Rebalancing is
   function removePortfolioToken(
     address _token
   ) external onlyAssetManager nonReentrant protocolNotPaused {
-
-    address[] memory currentTokens = _getCurrentTokens();    
-    if (!_isPortfolioToken(_token,currentTokens)) revert ErrorLibrary.NotPortfolioToken();
+    if (!_isPortfolioToken(_token)) revert ErrorLibrary.NotPortfolioToken();
 
     // Generate a new token list excluding the token to be removed
+    address[] memory currentTokens = _getCurrentTokens();
     uint256 tokensLength = currentTokens.length;
     address[] memory newTokens = new address[](tokensLength - 1);
     uint256 j = 0;
@@ -264,7 +228,7 @@ contract Rebalancing is
   function removeNonPortfolioToken(
     address _token
   ) external onlyAssetManager protocolNotPaused nonReentrant {
-    if (_isPortfolioToken(_token,_getCurrentTokens())) revert ErrorLibrary.IsPortfolioToken();
+    if (_isPortfolioToken(_token)) revert ErrorLibrary.IsPortfolioToken();
 
     uint256 tokenBalance = IERC20Upgradeable(_token).balanceOf(_vault);
     _tokenRemoval(_token, tokenBalance);
@@ -281,7 +245,7 @@ contract Rebalancing is
     address _token,
     uint256 _percentage
   ) external onlyAssetManager protocolNotPaused nonReentrant {
-    if (!_isPortfolioToken(_token,_getCurrentTokens())) revert ErrorLibrary.NotPortfolioToken();
+    if (!_isPortfolioToken(_token)) revert ErrorLibrary.NotPortfolioToken();
 
     uint256 tokenBalanceToRemove = _getTokenBalanceForPartialRemoval(
       _token,
@@ -299,7 +263,7 @@ contract Rebalancing is
     address _token,
     uint256 _percentage
   ) external onlyAssetManager protocolNotPaused nonReentrant {
-    if (_isPortfolioToken(_token,_getCurrentTokens())) revert ErrorLibrary.IsPortfolioToken();
+    if (_isPortfolioToken(_token)) revert ErrorLibrary.IsPortfolioToken();
 
     uint256 tokenBalanceToRemove = _getTokenBalanceForPartialRemoval(
       _token,
