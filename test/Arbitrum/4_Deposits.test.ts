@@ -109,7 +109,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
       const _protocolConfig = await upgrades.deployProxy(
         ProtocolConfig,
         [treasury.address, priceOracle.address],
-        { kind: "uups" },
+        { kind: "uups" }
       );
 
       protocolConfig = ProtocolConfig.attach(_protocolConfig.address);
@@ -121,13 +121,13 @@ describe.only("Tests for Deposit + Withdrawal", () => {
       await rebalancingDefult.deployed();
 
       const TokenExclusionManager = await ethers.getContractFactory(
-        "TokenExclusionManager",
+        "TokenExclusionManager"
       );
       const tokenExclusionManagerDefault = await TokenExclusionManager.deploy();
       await tokenExclusionManagerDefault.deployed();
 
       const AssetManagementConfig = await ethers.getContractFactory(
-        "AssetManagementConfig",
+        "AssetManagementConfig"
       );
       const assetManagementConfig = await AssetManagementConfig.deploy();
       await assetManagementConfig.deployed();
@@ -136,7 +136,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
       portfolioContract = await Portfolio.deploy();
       await portfolioContract.deployed();
       const PancakeSwapHandler = await ethers.getContractFactory(
-        "UniswapV2Handler",
+        "UniswapV2Handler"
       );
       swapHandler = await PancakeSwapHandler.deploy();
       await swapHandler.deployed();
@@ -166,19 +166,19 @@ describe.only("Tests for Deposit + Withdrawal", () => {
       await feeModule.deployed();
 
       const TokenRemovalVault = await ethers.getContractFactory(
-        "TokenRemovalVault",
+        "TokenRemovalVault"
       );
       const tokenRemovalVault = await TokenRemovalVault.deploy();
       await tokenRemovalVault.deployed();
 
       const VelvetSafeModule = await ethers.getContractFactory(
-        "VelvetSafeModule",
+        "VelvetSafeModule"
       );
       velvetSafeModule = await VelvetSafeModule.deploy();
       await velvetSafeModule.deployed();
 
       const PortfolioFactory = await ethers.getContractFactory(
-        "PortfolioFactory",
+        "PortfolioFactory"
       );
 
       const portfolioFactoryInstance = await upgrades.deployProxy(
@@ -200,11 +200,11 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             _protocolConfig: protocolConfig.address,
           },
         ],
-        { kind: "uups" },
+        { kind: "uups" }
       );
 
       portfolioFactory = PortfolioFactory.attach(
-        portfolioFactoryInstance.address,
+        portfolioFactoryInstance.address
       );
 
       console.log("portfolioFactory address:", portfolioFactory.address);
@@ -273,10 +273,10 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
       portfolio = await ethers.getContractAt(
         Portfolio__factory.abi,
-        portfolioAddress,
+        portfolioAddress
       );
       const PortfolioCalculations = await ethers.getContractFactory(
-        "PortfolioCalculations",
+        "PortfolioCalculations"
       );
       feeModule0 = FeeModule.attach(await portfolio.feeModule());
       portfolioCalculations = await PortfolioCalculations.deploy();
@@ -284,48 +284,48 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
       portfolio1 = await ethers.getContractAt(
         Portfolio__factory.abi,
-        portfolioAddress1,
+        portfolioAddress1
       );
 
       rebalancing = await ethers.getContractAt(
         Rebalancing__factory.abi,
-        portfolioInfo.rebalancing,
+        portfolioInfo.rebalancing
       );
 
       /////////////
       portfolio2 = await ethers.getContractAt(
         Portfolio__factory.abi,
-        portfolioAddress2,
+        portfolioAddress2
       );
 
       rebalancing = await ethers.getContractAt(
         Rebalancing__factory.abi,
-        portfolioInfo.rebalancing,
+        portfolioInfo.rebalancing
       );
 
       rebalancing1 = await ethers.getContractAt(
         Rebalancing__factory.abi,
-        portfolioInfo1.rebalancing,
+        portfolioInfo1.rebalancing
       );
 
       rebalancing2 = await ethers.getContractAt(
         Rebalancing__factory.abi,
-        portfolioInfo2.rebalancing,
+        portfolioInfo2.rebalancing
       );
 
       tokenExclusionManager = await ethers.getContractAt(
         TokenExclusionManager__factory.abi,
-        portfolioInfo.tokenExclusionManager,
+        portfolioInfo.tokenExclusionManager
       );
 
       tokenExclusionManager1 = await ethers.getContractAt(
         TokenExclusionManager__factory.abi,
-        portfolioInfo1.tokenExclusionManager,
+        portfolioInfo1.tokenExclusionManager
       );
 
       tokenExclusionManager2 = await ethers.getContractAt(
         TokenExclusionManager__factory.abi,
-        portfolioInfo2.tokenExclusionManager,
+        portfolioInfo2.tokenExclusionManager
       );
 
       console.log("portfolio deployed to:", portfolio.address);
@@ -345,13 +345,13 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
       it("should revert if not a superAdmin + nonRebalancer contract calls functions", async () => {
         await expect(
-          portfolio.connect(addr2).initToken([addresses.ARB, addresses.WBTC]),
+          portfolio.connect(addr2).initToken([addresses.ARB, addresses.WBTC])
         ).to.be.revertedWithCustomError(portfolio, "CallerNotSuperAdmin");
       });
 
       it("Calling the function mintShares should fail (only callable by contracts)", async () => {
         await expect(
-          portfolio.mintShares(owner.address, "10000000"),
+          portfolio.mintShares(owner.address, "10000000")
         ).to.be.revertedWithCustomError(portfolio, "CallerNotPortfolioManager");
       });
 
@@ -369,7 +369,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             addresses.aArbLINK,
             addresses.aArbUSDC,
             addresses.aArbUSDT,
-          ]),
+          ])
         ).to.be.revertedWithCustomError(portfolio, "TokenCountOutOfLimit");
       });
 
@@ -407,7 +407,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const tokens = await portfolio.getTokens();
@@ -416,7 +416,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             owner.address,
             tokens[i],
-            portfolio.address,
+            portfolio.address
           );
           await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
             value: "100000000000000000",
@@ -441,12 +441,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await owner._signTypedData(domain, types, values);
 
         await expect(
-          portfolio.multiTokenDeposit(amounts, "0", permit, signature),
+          portfolio.multiTokenDeposit(amounts, "0", permit, signature)
         ).to.be.reverted;
       });
 
@@ -456,7 +456,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         for (let i = 0; i < tokens.length; i++) {
           await ERC20.attach(tokens[i]).approve(
             PERMIT2_ADDRESS,
-            MaxAllowanceTransferAmount,
+            MaxAllowanceTransferAmount
           );
         }
       });
@@ -492,7 +492,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const tokens = await portfolio.getTokens();
@@ -501,10 +501,10 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             assetManagerTreasury.address,
             tokens[i],
-            portfolio.address,
+            portfolio.address
           );
           let balance = await ERC20.attach(tokens[i]).balanceOf(
-            assetManagerTreasury.address,
+            assetManagerTreasury.address
           );
           let detail = {
             token: tokens[i],
@@ -525,18 +525,18 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await assetManagerTreasury._signTypedData(
           domain,
           types,
-          values,
+          values
         );
 
         await expect(
           portfolio
             .connect(assetManagerTreasury)
-            .multiTokenDeposit(amounts, "0", permit, signature),
+            .multiTokenDeposit(amounts, "0", permit, signature)
         ).to.be.revertedWithCustomError(portfolio, "UserNotAllowedToDeposit");
       });
 
@@ -551,7 +551,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const tokens = await portfolio.getTokens();
@@ -560,7 +560,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             treasury.address,
             tokens[i],
-            portfolio.address,
+            portfolio.address
           );
           await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
             value: "100000000000000000",
@@ -585,14 +585,14 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await owner._signTypedData(domain, types, values);
 
         await expect(
           portfolio
             .connect(treasury)
-            .multiTokenDeposit(amounts, "0", permit, signature),
+            .multiTokenDeposit(amounts, "0", permit, signature)
         ).to.be.revertedWithCustomError(portfolio, "UserNotAllowedToDeposit");
       });
 
@@ -600,7 +600,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         await expect(
           protocolConfig
             .connect(nonOwner)
-            .updateMinPortfolioTokenHoldingAmount("100000"),
+            .updateMinPortfolioTokenHoldingAmount("100000")
         ).to.be.reverted;
       });
 
@@ -615,7 +615,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const tokens = await portfolio.getTokens();
@@ -624,7 +624,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             owner.address,
             tokens[i],
-            portfolio.address,
+            portfolio.address
           );
           await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
             value: "100000000000000000",
@@ -649,7 +649,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await owner._signTypedData(domain, types, values);
 
@@ -658,8 +658,8 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             amounts,
             "101000000000000000000",
             permit,
-            signature,
-          ),
+            signature
+          )
         ).to.be.revertedWithCustomError(portfolio, "InvalidMintAmount");
       });
 
@@ -674,7 +674,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const tokens = await portfolio.getTokens();
@@ -683,7 +683,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             owner.address,
             tokens[i],
-            portfolio.address,
+            portfolio.address
           );
           await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
             value: "100000000000000000",
@@ -708,12 +708,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await owner._signTypedData(domain, types, values);
 
         await expect(
-          portfolio.multiTokenDeposit(amounts, "0", permit, signature),
+          portfolio.multiTokenDeposit(amounts, "0", permit, signature)
         ).to.be.revertedWithCustomError(portfolio, "AmountCannotBeZero");
       });
 
@@ -731,7 +731,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
@@ -739,7 +739,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             owner.address,
             tokens[i],
-            portfolio1.address,
+            portfolio1.address
           );
           await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
             value: "100000000000000000",
@@ -764,7 +764,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await owner._signTypedData(domain, types, values);
 
@@ -790,7 +790,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
@@ -798,7 +798,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             owner.address,
             tokens[i],
-            portfolio1.address,
+            portfolio1.address
           );
           await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
             value: "100000000000000000",
@@ -823,15 +823,15 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await owner._signTypedData(domain, types, values);
 
         await expect(
-          portfolio1.multiTokenDeposit(amounts, "0", permit, signature),
+          portfolio1.multiTokenDeposit(amounts, "0", permit, signature)
         ).to.be.revertedWithCustomError(
           portfolio1,
-          "MintedAmountIsNotAccepted",
+          "MintedAmountIsNotAccepted"
         );
       });
 
@@ -849,7 +849,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
@@ -857,7 +857,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             owner.address,
             tokens[i],
-            portfolio1.address,
+            portfolio1.address
           );
           await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
             value: "100000000000000000",
@@ -882,7 +882,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await owner._signTypedData(domain, types, values);
 
@@ -908,7 +908,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
@@ -916,7 +916,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             addr2.address,
             tokens[i],
-            portfolio1.address,
+            portfolio1.address
           );
           await swapHandler.swapETHToTokens("5000", tokens[i], addr2.address, {
             value: "100000000000000000",
@@ -941,7 +941,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await addr2._signTypedData(domain, types, values);
 
@@ -966,7 +966,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const supplyBefore = await portfolio.totalSupply();
@@ -977,7 +977,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             owner.address,
             tokens[i],
-            portfolio.address,
+            portfolio.address
           );
           await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
             value: "100000000000000000",
@@ -1002,7 +1002,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await owner._signTypedData(domain, types, values);
 
@@ -1012,7 +1012,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         expect(Number(supplyAfter)).to.be.greaterThan(Number(supplyBefore));
         expect(Number(supplyAfter)).to.be.equals(
-          Number("100000000000000000000"),
+          Number("100000000000000000000")
         );
         console.log("supplyAfter", supplyAfter);
       });
@@ -1064,7 +1064,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const tokens = await portfolio.getTokens();
@@ -1073,7 +1073,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             owner.address,
             tokens[i],
-            portfolio.address,
+            portfolio.address
           );
           await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
             value: "100000000000000000",
@@ -1098,14 +1098,14 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await owner._signTypedData(domain, types, values);
 
         // Calculation to make minimum amount value for user---------------------------------
         let result = await portfolioCalculations.getUserAmountToDeposit(
           amounts,
-          portfolio.address,
+          portfolio.address
         );
         //-----------------------------------------------------------------------------------
 
@@ -1122,7 +1122,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         let mintAmount = await calcuateExpectedMintAmount(
           leastPercentage,
-          await portfolio.totalSupply(),
+          await portfolio.totalSupply()
         );
 
         // considering 1% slippage
@@ -1131,8 +1131,8 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             inputAmounts,
             Math.abs(mintAmount).toString(),
             permit,
-            signature,
-          ),
+            signature
+          )
         ).to.be.revertedWithCustomError(portfolio, "InvalidMintAmount");
       });
 
@@ -1149,7 +1149,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const supplyBefore = await portfolio.totalSupply();
@@ -1160,7 +1160,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             owner.address,
             tokens[i],
-            portfolio.address,
+            portfolio.address
           );
           await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
             value: "100000000000000000",
@@ -1185,14 +1185,14 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await owner._signTypedData(domain, types, values);
 
         // Calculation to make minimum amount value for user---------------------------------
         let result = await portfolioCalculations.getUserAmountToDeposit(
           amounts,
-          portfolio.address,
+          portfolio.address
         );
         //-----------------------------------------------------------------------------------
 
@@ -1210,7 +1210,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         let mintAmount =
           (await calcuateExpectedMintAmount(
             leastPercentage,
-            await portfolio.totalSupply(),
+            await portfolio.totalSupply()
           )) * 0.98; // 2% entry fee
 
         // considering 1% slippage
@@ -1218,7 +1218,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           inputAmounts,
           (Math.abs(mintAmount) * 0.99).toString(),
           permit,
-          signature, // slippage 1%
+          signature // slippage 1%
         );
 
         const supplyAfter = await portfolio.totalSupply();
@@ -1228,7 +1228,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
       it("owner can change minPortfolioTokenHoldingAmount", async () => {
         await protocolConfig.updateMinPortfolioTokenHoldingAmount(
-          "500000000000000000",
+          "500000000000000000"
         );
       });
 
@@ -1242,18 +1242,18 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const config = await portfolio.assetManagementConfig();
         const AssetManagementConfig = await ethers.getContractFactory(
-          "AssetManagementConfig",
+          "AssetManagementConfig"
         );
         const assetManagementConfig = AssetManagementConfig.attach(config);
         await assetManagementConfig.updateMinPortfolioTokenHoldingAmount(
-          "500000000000000000",
+          "500000000000000000"
         );
 
         let tokenDetails = [];
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const tokens = await portfolio.getTokens();
@@ -1262,7 +1262,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             nonOwner.address,
             tokens[i],
-            portfolio.address,
+            portfolio.address
           );
           await swapHandler.swapETHToTokens(
             "500",
@@ -1270,10 +1270,10 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             nonOwner.address,
             {
               value: "100000000000000000",
-            },
+            }
           );
           let balance = await ERC20.attach(tokens[i]).balanceOf(
-            nonOwner.address,
+            nonOwner.address
           );
           let detail = {
             token: tokens[i],
@@ -1294,14 +1294,14 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await nonOwner._signTypedData(domain, types, values);
 
         // Calculation to make minimum amount value for user---------------------------------
         let result = await portfolioCalculations.getUserAmountToDeposit(
           amounts,
-          portfolio.address,
+          portfolio.address
         );
         //-----------------------------------------------------------------------------------
 
@@ -1310,14 +1310,14 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         let inputAmounts = [];
         for (let i = 0; i < newAmounts.length; i++) {
           inputAmounts.push(
-            ethers.BigNumber.from(newAmounts[i]).div(1000).toString(),
+            ethers.BigNumber.from(newAmounts[i]).div(1000).toString()
           );
         }
 
         await expect(
           portfolio
             .connect(nonOwner)
-            .multiTokenDeposit(inputAmounts, "0", permit, signature),
+            .multiTokenDeposit(inputAmounts, "0", permit, signature)
         ).to.be.revertedWithCustomError(portfolio, "MintedAmountIsNotAccepted");
       });
 
@@ -1335,7 +1335,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
@@ -1343,7 +1343,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             nonOwner.address,
             tokens[i],
-            portfolio.address,
+            portfolio.address
           );
           await swapHandler.swapETHToTokens(
             "500",
@@ -1351,10 +1351,10 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             nonOwner.address,
             {
               value: "100000000000000000",
-            },
+            }
           );
           let balance = await ERC20.attach(tokens[i]).balanceOf(
-            nonOwner.address,
+            nonOwner.address
           );
           let detail = {
             token: tokens[i],
@@ -1375,14 +1375,14 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await nonOwner._signTypedData(domain, types, values);
 
         // Calculation to make minimum amount value for user---------------------------------
         let result = await portfolioCalculations.getUserAmountToDeposit(
           amounts,
-          portfolio.address,
+          portfolio.address
         );
         //-----------------------------------------------------------------------------------
 
@@ -1416,7 +1416,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
@@ -1424,7 +1424,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             nonOwner.address,
             tokens[i],
-            portfolio.address,
+            portfolio.address
           );
           await swapHandler.swapETHToTokens(
             "500",
@@ -1432,10 +1432,10 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             nonOwner.address,
             {
               value: "100000000000000000",
-            },
+            }
           );
           let balance = await ERC20.attach(tokens[i]).balanceOf(
-            nonOwner.address,
+            nonOwner.address
           );
           let detail = {
             token: tokens[i],
@@ -1456,14 +1456,14 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await nonOwner._signTypedData(domain, types, values);
 
         // Calculation to make minimum amount value for user---------------------------------
         let result = await portfolioCalculations.getUserAmountToDeposit(
           amounts,
-          portfolio.address,
+          portfolio.address
         );
         //-----------------------------------------------------------------------------------
 
@@ -1485,7 +1485,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
       it("asset manager teasury should greater then 0", async () => {
         expect(
-          Number(await portfolio.balanceOf(assetManagerTreasury.address)),
+          Number(await portfolio.balanceOf(assetManagerTreasury.address))
         ).to.be.greaterThan(0);
       });
 
@@ -1500,7 +1500,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const permit2 = await ethers.getContractAt(
           "IAllowanceTransfer",
-          PERMIT2_ADDRESS,
+          PERMIT2_ADDRESS
         );
 
         function toDeadline(expiration: number) {
@@ -1515,7 +1515,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           let { nonce } = await permit2.allowance(
             owner.address,
             tokens[i],
-            portfolio.address,
+            portfolio.address
           );
           await swapHandler.swapETHToTokens("500", tokens[i], owner.address, {
             value: "100000000000000000",
@@ -1540,7 +1540,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const { domain, types, values } = AllowanceTransfer.getPermitData(
           permit,
           PERMIT2_ADDRESS,
-          chainId,
+          chainId
         );
         const signature = await owner._signTypedData(domain, types, values);
         await portfolio.multiTokenDeposit(amounts, "0", permit, signature);
@@ -1567,12 +1567,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
         let balance = BigNumber.from(
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         ).toString();
 
         const encodedParameters = ethers.utils.defaultAbiCoder.encode(
           ["bytes[]", "address[]", "uint256[]"],
-          [["0x"], [buyToken], [0]],
+          [["0x"], [buyToken], [0]]
         );
 
         await expect(
@@ -1582,7 +1582,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             _sellAmounts: [balance],
             _handler: ensoHandler.address,
             _callData: encodedParameters,
-          }),
+          })
         ).to.be.revertedWithCustomError(portfolio, "TokenNotWhitelisted");
       });
 
@@ -1602,14 +1602,14 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
         let balance = BigNumber.from(
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         ).toString();
 
         const data = await createEnsoDataElement(sellToken, buyToken, balance);
 
         const encodedParameters = ethers.utils.defaultAbiCoder.encode(
           ["bytes[]", "address[]", "uint256[]"],
-          [["0x"], [buyToken], [0]],
+          [["0x"], [buyToken], [0]]
         );
 
         await expect(
@@ -1619,7 +1619,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             _sellAmounts: [balance],
             _handler: addresses.WBTC,
             _callData: encodedParameters,
-          }),
+          })
         ).to.be.revertedWithCustomError(rebalancing, "InvalidSolver");
       });
 
@@ -1640,12 +1640,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
         let balance = BigNumber.from(
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         ).toString();
 
         const encodedParameters = ethers.utils.defaultAbiCoder.encode(
           ["bytes[]", "address[]", "uint256[]"],
-          [["0x"], [buyToken], [0]],
+          [["0x"], [buyToken], [0]]
         );
 
         await expect(
@@ -1655,7 +1655,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             _sellAmounts: [balance],
             _handler: ensoHandler.address,
             _callData: encodedParameters,
-          }),
+          })
         ).to.be.revertedWithCustomError(rebalancing, "ProtocolIsPaused");
       });
 
@@ -1666,8 +1666,8 @@ describe.only("Tests for Deposit + Withdrawal", () => {
       it("should revert if wrong buy token is passed to enso", async () => {
         let tokens = await portfolio.getTokens();
         let sellToken = tokens[0];
-        let buyTokenManipulated = addresses.LINK;
-        let buyToken = addresses.DAI;
+        let buyTokenManipulated = addresses.LINK_Address;
+        let buyToken = addresses.DOT;
 
         let newTokens = [buyToken, tokens[1], tokens[2]];
 
@@ -1675,7 +1675,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
         let balance = BigNumber.from(
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         ).toString();
 
         const postResponse = await createEnsoCallDataRoute(
@@ -1683,12 +1683,30 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           ensoHandler.address,
           sellToken,
           buyTokenManipulated,
-          balance,
+          balance
         );
 
         const encodedParameters = ethers.utils.defaultAbiCoder.encode(
-          ["bytes[]", "address[]", "uint256[]"],
-          [[postResponse.data.tx.data], [buyToken], [0]],
+          [
+            " bytes[][]", // callDataEnso
+            "bytes[]", // callDataDecreaseLiquidity
+            "bytes[][]", // callDataIncreaseLiquidity
+            "address[][]", // increaseLiquidityTarget
+            "address[]", // underlyingTokensDecreaseLiquidity
+            "address[]", // tokensIn
+            "address[]", // tokens
+            "uint256[]", // minExpectedOutputAmounts
+          ],
+          [
+            [[postResponse.data.tx.data]],
+            [],
+            [[]],
+            [[]],
+            [],
+            [sellToken],
+            [buyToken],
+            [0],
+          ]
         );
 
         await expect(
@@ -1698,18 +1716,18 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             _sellAmounts: [balance],
             _handler: ensoHandler.address,
             _callData: encodedParameters,
-          }),
+          })
         ).to.be.revertedWithCustomError(
           ensoHandler,
-          "ReturnValueLessThenExpected",
+          "ReturnValueLessThenExpected"
         );
       });
 
       it("should revert if wrong buy token is passed to enso and as buy token (not included in new token list)", async () => {
         let tokens = await portfolio.getTokens();
         let sellToken = tokens[0];
-        let buyTokenManipulated = addresses.LINK;
-        let buyToken = addresses.DAI;
+        let buyTokenManipulated = addresses.LINK_Address;
+        let buyToken = addresses.DOT;
 
         let newTokens = [buyToken, tokens[1], tokens[2]];
 
@@ -1717,7 +1735,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
         let balance = BigNumber.from(
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         ).toString();
 
         const postResponse = await createEnsoCallDataRoute(
@@ -1725,12 +1743,30 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           ensoHandler.address,
           sellToken,
           buyTokenManipulated,
-          balance,
+          balance
         );
 
         const encodedParameters = ethers.utils.defaultAbiCoder.encode(
-          ["bytes[]", "address[]", "uint256[]"],
-          [[postResponse.data.tx.data], [buyTokenManipulated], [0]],
+          [
+            " bytes[][]", // callDataEnso
+            "bytes[]", // callDataDecreaseLiquidity
+            "bytes[][]", // callDataIncreaseLiquidity
+            "address[][]", // increaseLiquidityTarget
+            "address[]", // underlyingTokensDecreaseLiquidity
+            "address[]", // tokensIn
+            "address[]", // tokens
+            " uint256[]", // minExpectedOutputAmounts
+          ],
+          [
+            [[postResponse.data.tx.data]],
+            [],
+            [[]],
+            [[]],
+            [],
+            [sellToken],
+            [buyTokenManipulated],
+            [0],
+          ]
         );
 
         await expect(
@@ -1740,10 +1776,10 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             _sellAmounts: [balance],
             _handler: ensoHandler.address,
             _callData: encodedParameters,
-          }),
+          })
         ).to.be.revertedWithCustomError(
           rebalancing,
-          "BalanceOfVaultCannotNotBeZero",
+          "BalanceOfVaultCannotNotBeZero"
         );
       });
 
@@ -1759,7 +1795,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
 
         let manipulatedBalance = BigNumber.from(
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         )
           .div(2)
           .toString();
@@ -1769,12 +1805,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           ensoHandler.address,
           sellToken,
           buyToken,
-          manipulatedBalance,
+          manipulatedBalance
         );
 
         const encodedParameters = ethers.utils.defaultAbiCoder.encode(
           ["bytes[]", "address[]", "uint256[]"],
-          [[postResponse.data.tx.data], [buyToken], [0]],
+          [[postResponse.data.tx.data], [buyToken], [0]]
         );
 
         await expect(
@@ -1784,10 +1820,10 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             _sellAmounts: [manipulatedBalance],
             _handler: ensoHandler.address,
             _callData: encodedParameters,
-          }),
+          })
         ).to.be.revertedWithCustomError(
           rebalancing,
-          "NonPortfolioTokenBalanceIsNotZero",
+          "NonPortfolioTokenBalanceIsNotZero"
         );
       });
 
@@ -1804,12 +1840,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
         let balance = BigNumber.from(
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         ).toString();
 
         const encodedParameters = ethers.utils.defaultAbiCoder.encode(
           ["bytes[]", "address[]", "uint256[]"],
-          [["0x"], [buyToken], [0, 0]],
+          [["0x"], [buyToken], [0, 0]]
         );
 
         await expect(
@@ -1819,7 +1855,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             _sellAmounts: [balance],
             _handler: ensoHandler.address,
             _callData: encodedParameters,
-          }),
+          })
         ).to.be.revertedWithCustomError(ensoHandler, "InvalidLength");
       });
 
@@ -1834,12 +1870,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
         let balance = BigNumber.from(
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         ).toString();
 
         const encodedParameters = ethers.utils.defaultAbiCoder.encode(
           ["bytes[]", "address[]", "uint256[]"],
-          [["0x", "0x"], [buyToken], [0]],
+          [["0x", "0x"], [buyToken], [0]]
         );
 
         await expect(
@@ -1849,7 +1885,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             _sellAmounts: [balance],
             _handler: ensoHandler.address,
             _callData: encodedParameters,
-          }),
+          })
         ).to.be.revertedWithCustomError(ensoHandler, "InvalidLength");
       });
 
@@ -1864,12 +1900,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
         let balance = BigNumber.from(
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         ).toString();
 
         const encodedParameters = ethers.utils.defaultAbiCoder.encode(
           ["bytes[]", "address[]", "uint256[]"],
-          [["0x"], [buyToken], [0]],
+          [["0x"], [buyToken], [0]]
         );
 
         await expect(
@@ -1879,7 +1915,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             _sellAmounts: [balance, "20"],
             _handler: ensoHandler.address,
             _callData: encodedParameters,
-          }),
+          })
         ).to.be.revertedWithCustomError(rebalancing, "InvalidLength");
       });
 
@@ -1896,7 +1932,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
         let balance = BigNumber.from(
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         ).toString();
 
         const postResponse = await createEnsoCallDataRoute(
@@ -1904,12 +1940,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           ensoHandler.address,
           sellToken,
           buyToken,
-          balance,
+          balance
         );
 
         const encodedParameters = ethers.utils.defaultAbiCoder.encode(
           ["bytes[]", "address[]", "uint256[]"],
-          [[postResponse.data.tx.data], [buyToken], [0]],
+          [[postResponse.data.tx.data], [buyToken], [0]]
         );
 
         await expect(
@@ -1919,12 +1955,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             _sellAmounts: [balance],
             _handler: ensoHandler.address,
             _callData: encodedParameters,
-          }),
+          })
         ).to.be.revertedWithCustomError(rebalancing, "InvalidBuyTokenList");
 
         console.log(
           "balance after sell",
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         );
       });
 
@@ -1939,12 +1975,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
         let balance = BigNumber.from(
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         ).toString();
 
         const encodedParameters = ethers.utils.defaultAbiCoder.encode(
           ["bytes[]", "address[]", "uint256[]"],
-          [["0x"], [buyToken], [0]],
+          [["0x"], [buyToken], [0]]
         );
 
         await expect(
@@ -1954,7 +1990,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
             _sellAmounts: [balance],
             _handler: ensoHandler.address,
             _callData: encodedParameters,
-          }),
+          })
         ).to.be.revertedWithCustomError(rebalancing, "CallerNotAssetManager");
       });
 
@@ -1969,7 +2005,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
         let balance = BigNumber.from(
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         ).toString();
 
         const postResponse = await createEnsoCallDataRoute(
@@ -1977,12 +2013,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           ensoHandler.address,
           sellToken,
           buyToken,
-          balance,
+          balance
         );
 
         const encodedParameters = ethers.utils.defaultAbiCoder.encode(
           ["bytes[]", "address[]", "uint256[]"],
-          [[postResponse.data.tx.data], [buyToken], [0]],
+          [[postResponse.data.tx.data], [buyToken], [0]]
         );
 
         await rebalancing.updateTokens({
@@ -1995,7 +2031,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         console.log(
           "balance after sell",
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         );
       });
 
@@ -2008,7 +2044,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         let ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
         let balance = BigNumber.from(
-          await ERC20.attach(sellToken).balanceOf(vault),
+          await ERC20.attach(sellToken).balanceOf(vault)
         )
           .div(2)
           .toString();
@@ -2018,12 +2054,12 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           ensoHandler.address,
           sellToken,
           buyToken,
-          balance,
+          balance
         );
 
         const encodedParameters = ethers.utils.defaultAbiCoder.encode(
           ["bytes[]", "address[]", "uint256[]"],
-          [[postResponse.data.tx.data], [buyToken], [0]],
+          [[postResponse.data.tx.data], [buyToken], [0]]
         );
 
         let balanceBefore = await ERC20.attach(buyToken).balanceOf(vault);
@@ -2032,7 +2068,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           [sellToken],
           [balance],
           ensoHandler.address,
-          encodedParameters,
+          encodedParameters
         );
 
         let balanceAfter = await ERC20.attach(buyToken).balanceOf(vault);
@@ -2048,7 +2084,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const tokenRemoved = addresses.WBTC;
 
         let tokenBalanceBefore = await ERC20.attach(tokenRemoved).balanceOf(
-          owner.address,
+          owner.address
         );
 
         let userShare = (
@@ -2066,17 +2102,17 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           .vault;
 
         let tokenBalanceBeforeVault = await ERC20.attach(
-          tokenRemoved,
+          tokenRemoved
         ).balanceOf(removedTokenVault);
 
         await tokenExclusionManager.claimTokenAtId(owner.address, 1);
 
         let tokenBalanceAfter = await ERC20.attach(tokenRemoved).balanceOf(
-          owner.address,
+          owner.address
         );
 
         let tokenBalanceAfterVault = await ERC20.attach(tokenRemoved).balanceOf(
-          removedTokenVault,
+          removedTokenVault
         );
 
         let userRemovedTokenRatio = BigNumber.from(tokenBalanceBeforeVault)
@@ -2093,13 +2129,13 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const tokenToRemove = addresses.WBTC;
 
         let tokenBalanceBefore = await ERC20.attach(tokenToRemove).balanceOf(
-          owner.address,
+          owner.address
         );
 
         await tokenExclusionManager.claimTokenAtId(owner.address, 1);
 
         let tokenBalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
-          owner.address,
+          owner.address
         );
 
         expect(tokenBalanceAfter).to.be.equals(tokenBalanceBefore);
@@ -2110,7 +2146,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         const supplyBefore = await portfolio.totalSupply();
         const amountPortfolioToken = await portfolio.balanceOf(
-          nonOwner.address,
+          nonOwner.address
         );
 
         const ERC20 = await ethers.getContractFactory("ERC20Upgradeable");
@@ -2119,7 +2155,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         let tokenBalanceBefore: any = [];
         for (let i = 0; i < tokens.length; i++) {
           tokenBalanceBefore[i] = await ERC20.attach(tokens[i]).balanceOf(
-            nonOwner.address,
+            nonOwner.address
           );
         }
 
@@ -2131,10 +2167,10 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
         for (let i = 0; i < tokens.length; i++) {
           let tokenBalanceAfter = await ERC20.attach(tokens[i]).balanceOf(
-            nonOwner.address,
+            nonOwner.address
           );
           expect(Number(tokenBalanceAfter)).to.be.greaterThan(
-            Number(tokenBalanceBefore[i]),
+            Number(tokenBalanceBefore[i])
           );
         }
         expect(Number(supplyBefore)).to.be.greaterThan(Number(supplyAfter));
@@ -2145,7 +2181,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const tokenToRemove = addresses.WBTC;
 
         let tokenBalanceBefore: any = await ERC20.attach(
-          tokenToRemove,
+          tokenToRemove
         ).balanceOf(nonOwner.address);
 
         let userShare = (
@@ -2163,17 +2199,17 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           .vault;
 
         let tokenBalanceBeforeVault = await ERC20.attach(
-          tokenToRemove,
+          tokenToRemove
         ).balanceOf(removedTokenVault);
 
         await tokenExclusionManager.claimTokenAtId(nonOwner.address, 1);
 
         let tokenBalanceAfter: any = await ERC20.attach(
-          tokenToRemove,
+          tokenToRemove
         ).balanceOf(nonOwner.address);
 
         let tokenBalanceAfterVault = await ERC20.attach(
-          tokenToRemove,
+          tokenToRemove
         ).balanceOf(removedTokenVault);
 
         let userRemovedTokenRatio = BigNumber.from(tokenBalanceBeforeVault)
@@ -2190,13 +2226,13 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const tokenToRemove = addresses.WBTC;
 
         let tokenBalanceBefore = await ERC20.attach(tokenToRemove).balanceOf(
-          owner.address,
+          owner.address
         );
 
         await tokenExclusionManager.claimTokenAtId(addr1.address, 1);
 
         let tokenBalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
-          owner.address,
+          owner.address
         );
 
         expect(tokenBalanceAfter).to.be.equals(tokenBalanceBefore);
@@ -2209,7 +2245,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         await expect(
           rebalancing
             .connect(addr2)
-            .removePortfolioTokenPartially(tokenToRemove, "10000"),
+            .removePortfolioTokenPartially(tokenToRemove, "10000")
         ).to.be.revertedWithCustomError(rebalancing, "CallerNotAssetManager");
       });
 
@@ -2218,10 +2254,10 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const tokenToRemove = tokens[0];
 
         await expect(
-          rebalancing.removePortfolioTokenPartially(tokenToRemove, "10000"),
+          rebalancing.removePortfolioTokenPartially(tokenToRemove, "10000")
         ).to.be.revertedWithCustomError(
           rebalancing,
-          "InvalidTokenRemovalPercentage",
+          "InvalidTokenRemovalPercentage"
         );
       });
 
@@ -2233,13 +2269,13 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const tokenToRemove = tokens[0];
 
         let vaultBalanceBefore = await ERC20.attach(tokenToRemove).balanceOf(
-          vault,
+          vault
         );
 
         await rebalancing.removePortfolioTokenPartially(tokenToRemove, "5000");
 
         let vaultBalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
-          vault,
+          vault
         );
 
         expect(vaultBalanceBefore).to.be.greaterThan(vaultBalanceAfter);
@@ -2252,7 +2288,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const tokenToRemove = tokens[0];
 
         let token1BalanceBefore = await ERC20.attach(tokenToRemove).balanceOf(
-          owner.address,
+          owner.address
         );
 
         let userShare = (
@@ -2272,31 +2308,31 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           .vault;
 
         let tokenRemovalVaultBalanceBefore = await ERC20.attach(
-          tokenToRemove,
+          tokenToRemove
         ).balanceOf(removedTokenVault);
 
         await tokenExclusionManager.claimTokenAtId(owner.address, 2);
 
         let token1BalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
-          owner.address,
+          owner.address
         );
 
         let tokenRemovalVaultBalanceAfter = await ERC20.attach(
-          tokenToRemove,
+          tokenToRemove
         ).balanceOf(removedTokenVault);
 
         let totalSupplyAfter = (await tokenExclusionManager.removedToken(2))
           .totalSupply;
 
         let userRemovedToken1Ratio = BigNumber.from(
-          tokenRemovalVaultBalanceBefore,
+          tokenRemovalVaultBalanceBefore
         )
           .sub(BigNumber.from(tokenRemovalVaultBalanceAfter))
           .mul(100)
           .div(BigNumber.from(tokenRemovalVaultBalanceBefore));
 
         expect(totalSupplyAfter).to.be.equals(
-          BigNumber.from(totalSupply).sub(BigNumber.from(userShare)),
+          BigNumber.from(totalSupply).sub(BigNumber.from(userShare))
         );
         expect(token1BalanceAfter).to.be.greaterThan(token1BalanceBefore);
         expect(userRemovedToken1Ratio).to.be.equals(userIdxShareRatio1);
@@ -2313,19 +2349,19 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
       it("should fail if startId is greater then last Id", async () => {
         await expect(
-          tokenExclusionManager1.claimRemovedTokens(owner.address, 2, 1),
+          tokenExclusionManager1.claimRemovedTokens(owner.address, 2, 1)
         ).to.be.revertedWithCustomError(tokenExclusionManager1, "InvalidId");
       });
 
       it("should fail if last Id is greater then current snapshot id", async () => {
         await expect(
-          tokenExclusionManager1.claimRemovedTokens(owner.address, 1, 5),
+          tokenExclusionManager1.claimRemovedTokens(owner.address, 1, 5)
         ).to.be.revertedWithCustomError(tokenExclusionManager1, "InvalidId");
       });
 
       it("should fail if id is greater then currentSnapsotId", async () => {
         await expect(
-          tokenExclusionManager1.claimTokenAtId(owner.address, 5),
+          tokenExclusionManager1.claimTokenAtId(owner.address, 5)
         ).to.be.revertedWithCustomError(tokenExclusionManager1, "InvalidId");
       });
 
@@ -2335,11 +2371,11 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const token2ToRemove = addresses.ARB;
 
         let token1BalanceBefore = await ERC20.attach(token1ToRemove).balanceOf(
-          owner.address,
+          owner.address
         );
 
         let token2BalanceBefore = await ERC20.attach(token2ToRemove).balanceOf(
-          owner.address,
+          owner.address
         );
 
         let userShare1 = (
@@ -2370,30 +2406,30 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           .vault;
 
         let token1BalanceBeforeVault = await ERC20.attach(
-          token1ToRemove,
+          token1ToRemove
         ).balanceOf(removedToken1Vault1);
 
         let token2BalanceBeforeVault = await ERC20.attach(
-          token2ToRemove,
+          token2ToRemove
         ).balanceOf(removedToken1Vault2);
 
         await tokenExclusionManager1.claimRemovedTokens(owner.address, 2, 2);
         await tokenExclusionManager1.claimTokenAtId(owner.address, 1);
 
         let token1BalanceAfter = await ERC20.attach(token1ToRemove).balanceOf(
-          owner.address,
+          owner.address
         );
 
         let token2BalanceAfter = await ERC20.attach(token2ToRemove).balanceOf(
-          owner.address,
+          owner.address
         );
 
         let token1BalanceAfterVault = await ERC20.attach(
-          token1ToRemove,
+          token1ToRemove
         ).balanceOf(removedToken1Vault1);
 
         let token2BalanceAfterVault = await ERC20.attach(
-          token2ToRemove,
+          token2ToRemove
         ).balanceOf(removedToken1Vault2);
 
         let userRemovedToken1Ratio = BigNumber.from(token1BalanceBeforeVault)
@@ -2415,7 +2451,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
 
       it("only portfolio manager can set userRecord that is portfolio contract and rebalancing contract", async () => {
         await expect(
-          tokenExclusionManager1.setUserRecord(owner.address, "10000"),
+          tokenExclusionManager1.setUserRecord(owner.address, "10000")
         ).to.be.reverted;
       });
 
@@ -2424,13 +2460,13 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         const tokenToRemove = addresses.WBTC;
 
         let tokenBalanceBefore = await ERC20.attach(tokenToRemove).balanceOf(
-          owner.address,
+          owner.address
         );
 
         await tokenExclusionManager1.claimTokenAtId(owner.address, 2);
 
         let tokenBalanceAfter = await ERC20.attach(tokenToRemove).balanceOf(
-          owner.address,
+          owner.address
         );
 
         expect(tokenBalanceAfter).to.be.equals(tokenBalanceBefore);
@@ -2481,38 +2517,38 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           .div(BigNumber.from(totalSupply1));
 
         let token1BalanceBefore = await ERC20.attach(token1Removed).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let token2BalanceBefore = await ERC20.attach(token2Removed).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let token3BalanceBefore = await ERC20.attach(token3Removed).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let token4BalanceBefore = await ERC20.attach(token4Removed).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let token5BalanceBefore = await ERC20.attach(token5Removed).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let token6BalanceBefore = await ERC20.attach(token6Removed).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let token7BalanceBefore = await ERC20.attach(token7Removed).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         //Claiming Token At Id 5
         await tokenExclusionManager1.claimTokenAtId(addr2.address, 5);
 
         let token5BalanceAfter = await ERC20.attach(token5Removed).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let userShare6 = (
@@ -2530,22 +2566,22 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           .vault;
 
         let tokenBalanceBeforeVault1 = await ERC20.attach(
-          token1Removed,
+          token1Removed
         ).balanceOf(removedTokenVault1);
 
         //Claiming Token From Id 1 To 3
         await tokenExclusionManager1.claimRemovedTokens(addr2.address, 1, 3);
 
         let token1BalanceAfter = await ERC20.attach(token1Removed).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let token2BalanceAfter = await ERC20.attach(token2Removed).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let token3BalanceAfter = await ERC20.attach(token3Removed).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let userShare4 = (
@@ -2563,44 +2599,44 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           .vault;
 
         let tokenBalanceBeforeVault6 = await ERC20.attach(
-          token6Removed,
+          token6Removed
         ).balanceOf(removedTokenVault6);
 
         //Claiming Token From Id 6 To 7
         await tokenExclusionManager1.claimRemovedTokens(addr2.address, 6, 7);
 
         let token6BalanceAfter = await ERC20.attach(token6Removed).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let token7BalanceAfter = await ERC20.attach(token7Removed).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let removedTokenVault4 = (await tokenExclusionManager1.removedToken(4))
           .vault;
 
         let tokenBalanceBeforeVault4 = await ERC20.attach(
-          token4Removed,
+          token4Removed
         ).balanceOf(removedTokenVault4);
 
         //Claiming Token At Id 4
         await tokenExclusionManager1.claimTokenAtId(addr2.address, 4);
 
         let token4BalanceAfter = await ERC20.attach(token4Removed).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let tokenBalanceAfterVault1 = await ERC20.attach(
-          token1Removed,
+          token1Removed
         ).balanceOf(removedTokenVault1);
 
         let tokenBalanceAfterVault4 = await ERC20.attach(
-          token4Removed,
+          token4Removed
         ).balanceOf(removedTokenVault4);
 
         let tokenBalanceAfterVault6 = await ERC20.attach(
-          token6Removed,
+          token6Removed
         ).balanceOf(removedTokenVault6);
 
         let userRemovedToken1Ratio = BigNumber.from(tokenBalanceBeforeVault1)
@@ -2644,7 +2680,7 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         let tokenRemoved = addresses.USDC;
 
         let tokenBalanceBefore = await ERC20.attach(tokenRemoved).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let userShare = (
@@ -2662,17 +2698,17 @@ describe.only("Tests for Deposit + Withdrawal", () => {
           .vault;
 
         let tokenBalanceBeforeVault = await ERC20.attach(
-          tokenRemoved,
+          tokenRemoved
         ).balanceOf(removedTokenVault);
 
         await tokenExclusionManager1.claimTokenAtId(addr2.address, 8);
 
         let tokenBalanceAfter = await ERC20.attach(tokenRemoved).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         let tokenBalanceAfterVault = await ERC20.attach(tokenRemoved).balanceOf(
-          removedTokenVault,
+          removedTokenVault
         );
 
         let userRemovedTokenRatio = BigNumber.from(tokenBalanceBeforeVault)
@@ -2690,13 +2726,13 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         let tokenRemoved = addresses.DAI;
 
         let tokenBalanceBefore = await ERC20.attach(tokenRemoved).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         await tokenExclusionManager1.claimTokenAtId(addr2.address, 5);
 
         let tokenBalanceAfter = await ERC20.attach(tokenRemoved).balanceOf(
-          addr2.address,
+          addr2.address
         );
 
         expect(tokenBalanceAfter).to.be.equals(tokenBalanceBefore);
@@ -2708,13 +2744,13 @@ describe.only("Tests for Deposit + Withdrawal", () => {
         let tokenRemoved = addresses.DAI;
 
         let tokenBalanceBefore = await ERC20.attach(tokenRemoved).balanceOf(
-          owner.address,
+          owner.address
         );
 
         await tokenExclusionManager1.claimTokenAtId(owner.address, 5);
 
         let tokenBalanceAfter = await ERC20.attach(tokenRemoved).balanceOf(
-          owner.address,
+          owner.address
         );
 
         expect(tokenBalanceAfter).to.be.greaterThan(tokenBalanceBefore);
