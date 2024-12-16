@@ -27,9 +27,6 @@ contract RebalancingConfig is AccessRoles, Initializable, TokenBalanceLibrary {
   IProtocolConfig public protocolConfig;
   IAssetManagementConfig public assetManagementConfig;
   ITokenExclusionManager internal tokenExclusionManager;
-
-  mapping(address => bool) public tokensMapping;
-
   address internal _vault;
 
   /**
@@ -67,60 +64,50 @@ contract RebalancingConfig is AccessRoles, Initializable, TokenBalanceLibrary {
   }
 
   /**
-   * @notice Checks that each token bought by the Solver is in the portfolio list.
-   * @param _ensoBuyTokens Array of token addresses bought by the Solver.
-   * @param _newTokens Array of new portfolio tokens.
+   * @notice Verifies that a list of tokens is present and has non-zero balances.
+   * @dev Uses a 256-slot bitmap to efficiently track up to 65,536 unique token addresses.
+   *      Each token address is mapped to a unique bit position in the bitmap using keccak256 hashing.
+   * @param _ensoBuyTokens Array of tokens expected to be present in the bitmap.
+   * @param _newTokens Array of new tokens to validate and mark in the bitmap.
    */
   function _verifyNewTokenList(
     address[] memory _ensoBuyTokens,
     address[] memory _newTokens
-  ) internal {
-    uint256 tokenLength = _newTokens.length;
-    for (uint256 i; i < tokenLength; i++) {
-      address token = _newTokens[i];
-      if (_getTokenBalanceOf(token, _vault) == 0)
-        revert ErrorLibrary.BalanceOfVaultCannotNotBeZero(token);
-      tokensMapping[token] = true;
-    }
+  ) internal view {
+    // Initialize a bitmap with 256 slots to handle up to 65,536 unique bit positions
+    uint256[256] memory tokenBitmap;
 
-    uint256 ensoBuyTokensLength = _ensoBuyTokens.length;
-    for (uint256 i; i < ensoBuyTokensLength; i++) {
-      if (!tokensMapping[_ensoBuyTokens[i]]) {
-        revert ErrorLibrary.InvalidBuyTokenList();
+    unchecked {
+      // Mark each token in _newTokens in the bitmap and ensure non-zero balance
+      for (uint256 i; i < _newTokens.length; i++) {
+        address token = _newTokens[i];
+
+        // Verify that the token balance is non-zero
+        if (_getTokenBalanceOf(token, _vault) == 0)
+          revert ErrorLibrary.BalanceOfVaultCannotNotBeZero(token);
+
+        // Calculate a unique bit position for this token
+        uint256 bitPos = uint256(keccak256(abi.encodePacked(token))) % 65536; // Hash to get a unique bit position in the range 0-65,535
+        uint256 index = bitPos / 256; // Determine the specific uint256 slot in the array (0 to 255)
+        uint256 offset = bitPos % 256; // Determine the bit position within that uint256 slot (0 to 255)
+
+        // Set the bit in the bitmap for this token
+        tokenBitmap[index] |= (1 << offset);
       }
-    }
 
-    for (uint256 i; i < tokenLength; i++) {
-      delete tokensMapping[_newTokens[i]];
-    }
-  }
+      // Verify that each token in _ensoBuyTokens is marked in the bitmap
+      for (uint256 i; i < _ensoBuyTokens.length; i++) {
+        uint256 bitPos = uint256(
+          keccak256(abi.encodePacked(_ensoBuyTokens[i]))
+        ) % 65536;
+        uint256 index = bitPos / 256;
+        uint256 offset = bitPos % 256;
 
-  /**
-   * @notice Updates the token balance mapping based on the new token list.
-   * @param _portfolioTokens Array of current portfolio tokens.
-   * @param _newTokens Array of new tokens after rebalancing.
-   */
-  function _verifyZeroBalanceForRemovedTokens(
-    address[] memory _portfolioTokens,
-    address[] memory _newTokens
-  ) internal {
-    uint256 tokenLength = _portfolioTokens.length;
-    for (uint256 i; i < tokenLength; i++) {
-      tokensMapping[_portfolioTokens[i]] = true;
-    }
-
-    uint256 newTokensLength = _newTokens.length;
-    for (uint256 i; i < newTokensLength; i++) {
-      tokensMapping[_newTokens[i]] = false;
-    }
-
-    for (uint256 i; i < tokenLength; i++) {
-      address _portfolioToken = _portfolioTokens[i];
-      if (tokensMapping[_portfolioToken]) {
-        if (_getTokenBalanceOf(_portfolioToken, _vault) != 0)
-          revert ErrorLibrary.NonPortfolioTokenBalanceIsNotZero();
+        // Check if the bit for this token is set; if not, revert
+        if ((tokenBitmap[index] & (1 << offset)) == 0) {
+          revert ErrorLibrary.InvalidBuyTokenList();
+        }
       }
-      delete tokensMapping[_portfolioToken];
     }
   }
 
@@ -137,14 +124,33 @@ contract RebalancingConfig is AccessRoles, Initializable, TokenBalanceLibrary {
    * @param _token The address of the token to check.
    * @return bool Returns true if the token is part of the portfolio, false otherwise.
    */
-  function _isPortfolioToken(address _token) internal view returns (bool) {
-    address[] memory currentTokens = _getCurrentTokens();
-    uint256 tokensLength = currentTokens.length;
-    for (uint256 i; i < tokensLength; i++) {
-      if (currentTokens[i] == _token) {
-        return true;
+  function _isPortfolioToken(
+    address _token,
+    address[] memory currentTokens
+  ) internal pure returns (bool) {
+    bool result;
+    assembly {
+      // Get the length of the currentTokens array
+      let len := mload(currentTokens)
+
+      // Get the pointer to the start of the array data
+      let dataPtr := add(currentTokens, 0x20)
+
+      // Loop through the array
+      for {
+        let i := 0
+      } lt(i, len) {
+        i := add(i, 1)
+      } {
+        // Check if the current token matches _token
+        if eq(mload(add(dataPtr, mul(i, 0x20))), _token) {
+          // If found, set result to true
+          result := 1
+          // Break the loop
+          i := len
+        }
       }
     }
-    return false;
+    return result;
   }
 }
