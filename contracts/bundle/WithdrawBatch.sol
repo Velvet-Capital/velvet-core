@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.17;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {TransferHelper} from "@uniswap/lib/contracts/libraries/TransferHelper.sol";
-import {IAllowanceTransfer} from "../core/interfaces/IAllowanceTransfer.sol";
-import {ErrorLibrary} from "../library/ErrorLibrary.sol";
-import {IPortfolio} from "../core/interfaces/IPortfolio.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { TransferHelper } from "@uniswap/lib/contracts/libraries/TransferHelper.sol";
+import { IAllowanceTransfer } from "../core/interfaces/IAllowanceTransfer.sol";
+import { ErrorLibrary } from "../library/ErrorLibrary.sol";
+import { IPortfolio } from "../core/interfaces/IPortfolio.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import { MathUtils } from "../core/calculations/MathUtils.sol";
 
 /**
  * @title WithdrawBatch
@@ -35,6 +36,7 @@ contract WithdrawBatch is ReentrancyGuard {
     address _target,
     address _tokenToWithdraw,
     address user,
+    uint256 _expectedOutputAmount,
     bytes[] memory _callData
   ) external nonReentrant {
     address[] memory tokens = IPortfolio(_target).getTokens();
@@ -46,6 +48,11 @@ contract WithdrawBatch is ReentrancyGuard {
     uint256 userBalanceBeforeSwap = _getTokenBalanceOfUser(
       _tokenToWithdraw,
       user
+    );
+
+    uint256 withdrawTokenBalanceBefore = _getTokenBalanceOfUser(
+      _tokenToWithdraw,
+      address(this)
     );
 
     // Perform swaps and send tokens to user
@@ -67,16 +74,57 @@ contract WithdrawBatch is ReentrancyGuard {
       }
     }
 
+    // Return balance difference to the user
+    uint256 withdrawTokenBalanceAfter = _getTokenBalanceOfUser(
+      _tokenToWithdraw,
+      address(this)
+    );
+    if (withdrawTokenBalanceAfter > withdrawTokenBalanceBefore) {
+      _transferTokens(
+        _tokenToWithdraw,
+        user,
+        withdrawTokenBalanceAfter - withdrawTokenBalanceBefore
+      );
+    }
+
     // Subtracting balanceIfSameToken to get the correct amount, to verify that calldata is not manipulated,
     // and to ensure the user has received their shares properly
     uint256 userBalanceAfterSwap = _getTokenBalanceOfUser(
       _tokenToWithdraw,
       user
-    ) - balanceOfSameToken;
+    );
+
+    uint256 calldataBalanceDifference = userBalanceAfterSwap -
+      balanceOfSameToken;
+
+    uint256 balanceDifference = userBalanceAfterSwap - userBalanceBeforeSwap;
 
     //Checking balance of user after swap, to confirm recevier is user
-    if (userBalanceAfterSwap <= userBalanceBeforeSwap)
-      revert ErrorLibrary.InvalidBalanceDiff();
+    if (
+      balanceDifference < _expectedOutputAmount ||
+      calldataBalanceDifference <= userBalanceBeforeSwap
+    ) revert ErrorLibrary.InvalidBalanceDiff();
+  }
+
+  /**
+   * @notice Transfers tokens from this contract to a specified address
+   * @dev Handles both ETH and ERC20 token transfers
+   * @param _token Address of the token to transfer (use ETH_ADDRESS for ETH)
+   * @param _to Address of the recipient
+   * @param _amount Amount of tokens to transfer
+   */
+
+  function _transferTokens(
+    address _token,
+    address _to,
+    uint256 _amount
+  ) internal {
+    if (_token == ETH_ADDRESS) {
+      (bool success, ) = payable(_to).call{ value: _amount }("");
+      if (!success) revert ErrorLibrary.TransferFailed();
+    } else {
+      TransferHelper.safeTransfer(_token, _to, _amount);
+    }
   }
 
   /**
