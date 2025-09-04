@@ -25,7 +25,6 @@
     "coverageBsc": "npx hardhat coverage --testfiles \"test/Bsc/*test.*\" ",
     "coverageArbitrum": "npx hardhat coverage --testfiles \"test/Arbitrum/*test.*\" ",
     "account": "npx hardhat accounts",
-    "postinstall": "husky install",
     "size": "npx hardhat size-contracts",
     "lint": "solhint \"contracts/**/*.sol\" && eslint . --max-warnings=0",
     "lint:sol": "solhint \"contracts/**/*.sol\"",
