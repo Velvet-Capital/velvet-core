@@ -16,8 +16,13 @@ import { MathUtils } from "../core/calculations/MathUtils.sol";
  */
 contract WithdrawBatch is ReentrancyGuard {
   // The address of Enso's swap execution logic; swaps are delegated to this target.
-  address constant SWAP_TARGET = 0x38147794FF247e5Fc179eDbAE6C37fff88f68C52;
+  address public SWAP_TARGET;
   address constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+
+
+  constructor(address _swapTarget){
+    SWAP_TARGET = _swapTarget;
+  }
 
   /**
    * @notice Executes a multi-token swap and withdrawal process, sending the resulting tokens to the user.
