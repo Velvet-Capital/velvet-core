@@ -1,0 +1,66 @@
+{
+  "current_portfolio": {
+    "vault_address": "0x97798739141436984f1A51037Bf70220c16475b4",
+    "current_tokens": [
+      "0x50956c8e46a4f7Dfc7475e3957c162D29b39F75f",
+      "0xb84cEC1Ab2af11b530ae0d8594B1493556be49Cd"
+    ],
+    "token_count": 2,
+    "total_value_usd": 0.0
+  },
+  "target_allocation": [
+    {
+      "token_address": "0x50956c8e46a4f7dfc7475e3957c162d29b39f75f",
+      "symbol": "PT-ynBNBx",
+      "protocol": "pendle",
+      "apy": 0.12566186964385273,
+      "weight": 0.4,
+      "price_impact": 0.0
+    },
+    {
+      "token_address": "0xb84cec1ab2af11b530ae0d8594b1493556be49cd",
+      "symbol": "PT-slisBNB",
+      "protocol": "pendle",
+      "apy": 0.05834699929545084,
+      "weight": 0.3,
+      "price_impact": 0.0007
+    }
+  ],
+  "total_expected_apy": 0.06776884764617634,
+  "needs_rebalancing": true,
+  "rebalancing_steps": [
+    {
+      "step": 1,
+      "action": "sell",
+      "token_address": "0x50956c8e46a4f7Dfc7475e3957c162D29b39F75f",
+      "reason": "Not in optimal allocation"
+    },
+    {
+      "step": 2,
+      "action": "sell",
+      "token_address": "0xb84cEC1Ab2af11b530ae0d8594B1493556be49Cd",
+      "reason": "Not in optimal allocation"
+    },
+    {
+      "step": 3,
+      "action": "buy",
+      "token_address": "0x50956c8e46a4f7dfc7475e3957c162d29b39f75f",
+      "target_weight": 0.4,
+      "reason": "Target 40% allocation"
+    },
+    {
+      "step": 4,
+      "action": "buy",
+      "token_address": "0xb84cec1ab2af11b530ae0d8594b1493556be49cd",
+      "target_weight": 0.3,
+      "reason": "Target 30% allocation"
+    }
+  ],
+  "optimization_summary": {
+    "total_tokens_analyzed": 2,
+    "protocols_used": [
+      "pendle"
+    ],
+    "top_apy": 0.12566186964385273
+  }
+}

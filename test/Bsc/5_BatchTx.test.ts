@@ -113,11 +113,11 @@ describe.only("Tests for Deposit", () => {
       iaddress = await tokenAddresses();
 
       const EnsoHandler = await ethers.getContractFactory("EnsoHandler");
-      ensoHandler = await EnsoHandler.deploy();
+      ensoHandler = await EnsoHandler.deploy("0x7663fd40081dcCd47805c00e613B6beAc3B87F08");
       await ensoHandler.deployed();
 
       const DepositBatch = await ethers.getContractFactory("DepositBatch");
-      depositBatch = await DepositBatch.deploy();
+      depositBatch = await DepositBatch.deploy(owner.address,"0x7663fd40081dcCd47805c00e613B6beAc3B87F08");
       await depositBatch.deployed();
 
       const DepositManager = await ethers.getContractFactory("DepositManager");
@@ -125,7 +125,7 @@ describe.only("Tests for Deposit", () => {
       await depositManager.deployed();
 
       const WithdrawBatch = await ethers.getContractFactory("WithdrawBatch");
-      withdrawBatch = await WithdrawBatch.deploy();
+      withdrawBatch = await WithdrawBatch.deploy("0x7663fd40081dcCd47805c00e613B6beAc3B87F08");
       await withdrawBatch.deployed();
 
       const WithdrawManager = await ethers.getContractFactory(

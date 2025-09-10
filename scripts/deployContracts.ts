@@ -18,232 +18,232 @@ async function main() {
 
   console.log("--------------- Contract Deployment Started ---------------");
 
-  const PriceOracle = await ethers.getContractFactory("PriceOracle");
-  const priceOracle = await PriceOracle.deploy(addresses.WETH);
+  // const PriceOracle = await ethers.getContractFactory("PriceOracle");
+  // const priceOracle = await PriceOracle.deploy(addresses.WETH);
 
-  console.log("priceOracle address:", priceOracle.address);
+  // console.log("priceOracle address:", priceOracle.address);
 
-  await priceOracle.setFeeds(
-    [addresses.WETH, addresses.USDC, addresses.DAI],
-    [
-      "0x0000000000000000000000000000000000000348",
-      "0x0000000000000000000000000000000000000348",
-      "0x0000000000000000000000000000000000000348",
-    ],
-    [
-      "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70", //chainlink price feed
-      "0x7e860098F58bBFC8648a4311b374B1D669a2bc6B",
-      "0x591e79239a7d679378eC8c847e5038150364C78F",
-    ],
-  );
+  // await priceOracle.setFeeds(
+  //   [addresses.WETH, addresses.USDC, addresses.DAI],
+  //   [
+  //     "0x0000000000000000000000000000000000000348",
+  //     "0x0000000000000000000000000000000000000348",
+  //     "0x0000000000000000000000000000000000000348",
+  //   ],
+  //   [
+  //     "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70", //chainlink price feed
+  //     "0x7e860098F58bBFC8648a4311b374B1D669a2bc6B",
+  //     "0x591e79239a7d679378eC8c847e5038150364C78F",
+  //   ],
+  // );
 
-  await tenderly.verify({
-    name: "PriceOracle",
-    address: priceOracle.address,
-  });
+  // await tenderly.verify({
+  //   name: "PriceOracle",
+  //   address: priceOracle.address,
+  // });
 
-  const EnsoHandler = await ethers.getContractFactory("EnsoHandler");
-  const ensoHandler = await EnsoHandler.deploy();
+  const EnsoHandler = await ethers.getContractFactory("EnsoHandlerBundled");
+  const ensoHandler = await EnsoHandler.deploy("0x7663fd40081dcCd47805c00e613B6beAc3B87F08");
 
   console.log("ensoHandler address:", ensoHandler.address);
 
   await tenderly.verify({
-    name: "EnsoHandler",
+    name: "EnsoHandlerBundled",
     address: ensoHandler.address,
   });
 
-  const ProtocolConfig = await ethers.getContractFactory("ProtocolConfig");
-  const protocolConfig = await upgrades.deployProxy(ProtocolConfig, [
-    owner.address,
-    priceOracle.address,
-  ]);
+  // const ProtocolConfig = await ethers.getContractFactory("ProtocolConfig");
+  // const protocolConfig = await upgrades.deployProxy(ProtocolConfig, [
+  //   owner.address,
+  //   priceOracle.address,
+  // ]);
 
-  await tenderly.verify({
-    name: "ProtocolConfig",
-    address: protocolConfig.address,
-  });
+  // await tenderly.verify({
+  //   name: "ProtocolConfig",
+  //   address: protocolConfig.address,
+  // });
 
-  await protocolConfig.enableTokens([
-    addresses.WETH,
-    addresses.USDC,
-    addresses.DAI,
-  ]);
+  // await protocolConfig.enableTokens([
+  //   addresses.WETH,
+  //   addresses.USDC,
+  //   addresses.DAI,
+  // ]);
 
-  await protocolConfig.updateProtocolFee(0);
-  await protocolConfig.updateProtocolStreamingFee(0);
+  // await protocolConfig.updateProtocolFee(0);
+  // await protocolConfig.updateProtocolStreamingFee(0);
 
-  console.log("protocolConfig address:", protocolConfig.address);
+  // console.log("protocolConfig address:", protocolConfig.address);
 
-  await protocolConfig.setCoolDownPeriod("60");
+  // await protocolConfig.setCoolDownPeriod("60");
 
-  await protocolConfig.enableSolverHandler(ensoHandler.address);
+  // await protocolConfig.enableSolverHandler(ensoHandler.address);
 
-  const Rebalancing = await ethers.getContractFactory("Rebalancing");
-  const rebalancingDefault = await Rebalancing.deploy();
+  // const Rebalancing = await ethers.getContractFactory("Rebalancing");
+  // const rebalancingDefault = await Rebalancing.deploy();
 
-  console.log("rebalancingDefult address:", rebalancingDefault.address);
+  // console.log("rebalancingDefult address:", rebalancingDefault.address);
 
-  await tenderly.verify({
-    name: "Rebalancing",
-    address: rebalancingDefault.address,
-  });
+  // await tenderly.verify({
+  //   name: "Rebalancing",
+  //   address: rebalancingDefault.address,
+  // });
 
-  const AssetManagementConfig = await ethers.getContractFactory(
-    "AssetManagementConfig",
-  );
-  const assetManagementConfig = await AssetManagementConfig.deploy();
+  // const AssetManagementConfig = await ethers.getContractFactory(
+  //   "AssetManagementConfig",
+  // );
+  // const assetManagementConfig = await AssetManagementConfig.deploy();
 
-  console.log("assetManagerConfig address:", assetManagementConfig.address);
+  // console.log("assetManagerConfig address:", assetManagementConfig.address);
 
-  await tenderly.verify({
-    name: "AssetManagementConfig",
-    address: assetManagementConfig.address,
-  });
+  // await tenderly.verify({
+  //   name: "AssetManagementConfig",
+  //   address: assetManagementConfig.address,
+  // });
 
-  const Portfolio = await ethers.getContractFactory("Portfolio");
-  const portfolioContract = await Portfolio.deploy();
+  // const Portfolio = await ethers.getContractFactory("Portfolio");
+  // const portfolioContract = await Portfolio.deploy();
 
-  console.log("portfolioContract address:", portfolioContract.address);
+  // console.log("portfolioContract address:", portfolioContract.address);
 
-  await tenderly.verify({
-    name: "Portfolio",
-    address: portfolioContract.address,
-  });
+  // await tenderly.verify({
+  //   name: "Portfolio",
+  //   address: portfolioContract.address,
+  // });
 
-  const FeeModule = await ethers.getContractFactory("FeeModule");
-  const feeModule = await FeeModule.deploy();
+  // const FeeModule = await ethers.getContractFactory("FeeModule");
+  // const feeModule = await FeeModule.deploy();
 
-  console.log("feeModule address:", feeModule.address);
+  // console.log("feeModule address:", feeModule.address);
 
-  await tenderly.verify({
-    name: "FeeModule",
-    address: feeModule.address,
-  });
+  // await tenderly.verify({
+  //   name: "FeeModule",
+  //   address: feeModule.address,
+  // });
 
-  const VelvetSafeModule = await ethers.getContractFactory("VelvetSafeModule");
-  const velvetSafeModule = await VelvetSafeModule.deploy();
+  // const VelvetSafeModule = await ethers.getContractFactory("VelvetSafeModule");
+  // const velvetSafeModule = await VelvetSafeModule.deploy();
 
-  console.log("velvetSafeModule address:", velvetSafeModule.address);
+  // console.log("velvetSafeModule address:", velvetSafeModule.address);
 
-  await tenderly.verify({
-    name: "VelvetSafeModule",
-    address: velvetSafeModule.address,
-  });
+  // await tenderly.verify({
+  //   name: "VelvetSafeModule",
+  //   address: velvetSafeModule.address,
+  // });
 
-  const TokenExclusionManager = await ethers.getContractFactory(
-    "TokenExclusionManager",
-  );
-  const tokenExclusionManager = await TokenExclusionManager.deploy();
+  // const TokenExclusionManager = await ethers.getContractFactory(
+  //   "TokenExclusionManager",
+  // );
+  // const tokenExclusionManager = await TokenExclusionManager.deploy();
 
-  console.log("tokenExclusionManager address:", tokenExclusionManager.address);
+  // console.log("tokenExclusionManager address:", tokenExclusionManager.address);
 
-  await tenderly.verify({
-    name: "TokenExclusionManager",
-    address: tokenExclusionManager.address,
-  });
+  // await tenderly.verify({
+  //   name: "TokenExclusionManager",
+  //   address: tokenExclusionManager.address,
+  // });
 
-  const TokenRemovalVault = await ethers.getContractFactory(
-    "TokenRemovalVault",
-  );
-  const tokenRemovalVault = await TokenRemovalVault.deploy();
-  await tokenRemovalVault.deployed();
+  // const TokenRemovalVault = await ethers.getContractFactory(
+  //   "TokenRemovalVault",
+  // );
+  // const tokenRemovalVault = await TokenRemovalVault.deploy();
+  // await tokenRemovalVault.deployed();
 
-  console.log("tokenRemovalVault address:", tokenRemovalVault.address);
+  // console.log("tokenRemovalVault address:", tokenRemovalVault.address);
 
-  await tenderly.verify({
-    name: "TokenRemovalVault",
-    address: tokenRemovalVault.address,
-  });
+  // await tenderly.verify({
+  //   name: "TokenRemovalVault",
+  //   address: tokenRemovalVault.address,
+  // });
 
-  const DepositBatch = await ethers.getContractFactory("DepositBatch");
-  const depositBatch = await DepositBatch.deploy();
+  // const DepositBatch = await ethers.getContractFactory("DepositBatch");
+  // const depositBatch = await DepositBatch.deploy();
 
-  console.log("depositBatch address:", depositBatch.address);
+  // console.log("depositBatch address:", depositBatch.address);
 
-  await tenderly.verify({
-    name: "DepositBatch",
-    address: depositBatch.address,
-  });
+  // await tenderly.verify({
+  //   name: "DepositBatch",
+  //   address: depositBatch.address,
+  // });
 
-  const DepositManager = await ethers.getContractFactory("DepositManager");
-  const depositManager = await DepositManager.deploy(depositBatch.address);
+  // const DepositManager = await ethers.getContractFactory("DepositManager");
+  // const depositManager = await DepositManager.deploy(depositBatch.address);
 
-  console.log("depositManager address:", depositManager.address);
+  // console.log("depositManager address:", depositManager.address);
 
-  await tenderly.verify({
-    name: "DepositManager",
-    address: depositManager.address,
-  });
+  // await tenderly.verify({
+  //   name: "DepositManager",
+  //   address: depositManager.address,
+  // });
 
-  const WithdrawBatch = await ethers.getContractFactory("WithdrawBatch");
-  const withdrawBatch = await WithdrawBatch.deploy();
+  // const WithdrawBatch = await ethers.getContractFactory("WithdrawBatch");
+  // const withdrawBatch = await WithdrawBatch.deploy();
 
-  console.log("withdrawBatch address:", withdrawBatch.address);
+  // console.log("withdrawBatch address:", withdrawBatch.address);
 
-  await tenderly.verify({
-    name: "WithdrawBatch",
-    address: withdrawBatch.address,
-  });
+  // await tenderly.verify({
+  //   name: "WithdrawBatch",
+  //   address: withdrawBatch.address,
+  // });
 
-  const PortfolioCalculations = await ethers.getContractFactory(
-    "PortfolioCalculations",
-  );
-  const portfolioCalculations = await PortfolioCalculations.deploy();
+  // const PortfolioCalculations = await ethers.getContractFactory(
+  //   "PortfolioCalculations",
+  // );
+  // const portfolioCalculations = await PortfolioCalculations.deploy();
 
-  console.log("portfolioCalculations address:", portfolioCalculations.address);
+  // console.log("portfolioCalculations address:", portfolioCalculations.address);
 
-  await tenderly.verify({
-    name: "PortfolioCalculations",
-    address: portfolioCalculations.address,
-  });
+  // await tenderly.verify({
+  //   name: "PortfolioCalculations",
+  //   address: portfolioCalculations.address,
+  // });
 
-  console.log(
-    "------------------------------ Deployment Ended ------------------------------",
-  );
+  // console.log(
+  //   "------------------------------ Deployment Ended ------------------------------",
+  // );
 
-  const PortfolioFactory = await ethers.getContractFactory("PortfolioFactory");
+  // const PortfolioFactory = await ethers.getContractFactory("PortfolioFactory");
 
-  const portfolioFactoryInstance = await upgrades.deployProxy(
-    PortfolioFactory,
-    [
-      {
-        _basePortfolioAddress: portfolioContract.address,
-        _baseTokenExclusionManagerAddress: tokenExclusionManager.address,
-        _baseRebalancingAddres: rebalancingDefault.address,
-        _baseAssetManagementConfigAddress: assetManagementConfig.address,
-        _feeModuleImplementationAddress: feeModule.address,
-        _baseTokenRemovalVaultImplementation: tokenRemovalVault.address,
-        _baseVelvetGnosisSafeModuleAddress: velvetSafeModule.address,
-        _gnosisSingleton: addresses.gnosisSingleton,
-        _gnosisFallbackLibrary: addresses.gnosisFallbackLibrary,
-        _gnosisMultisendLibrary: addresses.gnosisMultisendLibrary,
-        _gnosisSafeProxyFactory: addresses.gnosisSafeProxyFactory,
-        _protocolConfig: protocolConfig.address,
-      },
-    ],
-    { kind: "uups" },
-  );
+  // const portfolioFactoryInstance = await upgrades.deployProxy(
+  //   PortfolioFactory,
+  //   [
+  //     {
+  //       _basePortfolioAddress: portfolioContract.address,
+  //       _baseTokenExclusionManagerAddress: tokenExclusionManager.address,
+  //       _baseRebalancingAddres: rebalancingDefault.address,
+  //       _baseAssetManagementConfigAddress: assetManagementConfig.address,
+  //       _feeModuleImplementationAddress: feeModule.address,
+  //       _baseTokenRemovalVaultImplementation: tokenRemovalVault.address,
+  //       _baseVelvetGnosisSafeModuleAddress: velvetSafeModule.address,
+  //       _gnosisSingleton: addresses.gnosisSingleton,
+  //       _gnosisFallbackLibrary: addresses.gnosisFallbackLibrary,
+  //       _gnosisMultisendLibrary: addresses.gnosisMultisendLibrary,
+  //       _gnosisSafeProxyFactory: addresses.gnosisSafeProxyFactory,
+  //       _protocolConfig: protocolConfig.address,
+  //     },
+  //   ],
+  //   { kind: "uups" },
+  // );
 
-  const portfolioFactory = PortfolioFactory.attach(
-    portfolioFactoryInstance.address,
-  );
+  // const portfolioFactory = PortfolioFactory.attach(
+  //   portfolioFactoryInstance.address,
+  // );
 
-  console.log("portfolioFactory address:", portfolioFactory.address);
+  // console.log("portfolioFactory address:", portfolioFactory.address);
 
-  const WithdrawManager = await ethers.getContractFactory("WithdrawManager");
-  const withdrawManager = await WithdrawManager.deploy();
+  // const WithdrawManager = await ethers.getContractFactory("WithdrawManager");
+  // const withdrawManager = await WithdrawManager.deploy();
 
-  console.log("withdrawManager address:", withdrawManager.address);
+  // console.log("withdrawManager address:", withdrawManager.address);
 
-  await tenderly.verify({
-    name: "WithdrawManager",
-    address: withdrawManager.address,
-  });
+  // await tenderly.verify({
+  //   name: "WithdrawManager",
+  //   address: withdrawManager.address,
+  // });
 
-  await withdrawManager.initialize(
-    withdrawBatch.address,
-    portfolioFactory.address,
-  );
+  // await withdrawManager.initialize(
+  //   withdrawBatch.address,
+  //   portfolioFactory.address,
+  // );
 }
 
 // We recommend this pattern to be able to use async/await everywhere

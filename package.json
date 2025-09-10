@@ -83,6 +83,7 @@
     "@openzeppelin/contracts-4.8.2": "npm:@openzeppelin/contracts@^4.8.2",
     "@openzeppelin/contracts-upgradeable-4.9.6": "npm:@openzeppelin/contracts-upgradeable@^4.9.6",
     "@openzeppelin/defender-admin-client": "^1.49.0",
+    "@pendle/core-v2": "^6.1.1",
     "@safe-global/api-kit": "^1.1.0",
     "@safe-global/protocol-kit": "^1.0.1",
     "@safe-global/safe-core-sdk-types": "^2.0.0",

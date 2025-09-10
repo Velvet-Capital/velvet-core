@@ -1,0 +1,1053 @@
+[
+    {
+      "inputs": [],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "CallerNotSuperAdmin",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidAddress",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidThresholdLength",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ModuleNotInitialised",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NoOwnerPassed",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "PortfolioCreationIsPause",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ProtocolIsPaused",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ProtocolNotPaused",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "previousAdmin",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "newAdmin",
+          "type": "address"
+        }
+      ],
+      "name": "AdminChanged",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "beacon",
+          "type": "address"
+        }
+      ],
+      "name": "BeaconUpgraded",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint8",
+          "name": "version",
+          "type": "uint8"
+        }
+      ],
+      "name": "Initialized",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "previousOwner",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "OwnershipTransferStarted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "previousOwner",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "OwnershipTransferred",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bool",
+          "name": "state",
+          "type": "bool"
+        }
+      ],
+      "name": "PortfolioCreationState",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "portfolio",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "tokenExclusionManager",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "rebalancing",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "owner",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "assetManagementConfig",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "feeModule",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "vaultAddress",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "gnosisModule",
+              "type": "address"
+            }
+          ],
+          "indexed": false,
+          "internalType": "struct PortfolioFactory.PortfoliolInfo",
+          "name": "portfolioData",
+          "type": "tuple"
+        },
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "portfolioId",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "_name",
+          "type": "string"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "_symbol",
+          "type": "string"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "_owner",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "_accessController",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "bool",
+          "name": "isPublicPortfolio",
+          "type": "bool"
+        }
+      ],
+      "name": "PortfolioInfo",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "TransferSuperAdminOwnership",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newImplementation",
+          "type": "address"
+        }
+      ],
+      "name": "UpdataTokenRemovalVaultBaseAddress",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newGnosisSingleton",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newGnosisFallbackLibrary",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newGnosisMultisendLibrary",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "newGnosisSafeProxyFactory",
+          "type": "address"
+        }
+      ],
+      "name": "UpdateGnosisAddresses",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newImplementation",
+          "type": "address"
+        }
+      ],
+      "name": "UpgradeAssetManagerConfig",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newImplementation",
+          "type": "address"
+        }
+      ],
+      "name": "UpgradeFeeModule",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newImplementation",
+          "type": "address"
+        }
+      ],
+      "name": "UpgradePortfolio",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newImplementation",
+          "type": "address"
+        }
+      ],
+      "name": "UpgradeRebalance",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newImplementation",
+          "type": "address"
+        }
+      ],
+      "name": "UpgradeTokenExclusionManager",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "implementation",
+          "type": "address"
+        }
+      ],
+      "name": "Upgraded",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "PortfolioInfolList",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "portfolio",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "tokenExclusionManager",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "rebalancing",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "assetManagementConfig",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "feeModule",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "vaultAddress",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "gnosisModule",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "acceptOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "_assetManagerTreasury",
+              "type": "address"
+            },
+            {
+              "internalType": "address[]",
+              "name": "_whitelistedTokens",
+              "type": "address[]"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_managementFee",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_performanceFee",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_entryFee",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_exitFee",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_initialPortfolioAmount",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_minPortfolioTokenHoldingAmount",
+              "type": "uint256"
+            },
+            {
+              "internalType": "bool",
+              "name": "_public",
+              "type": "bool"
+            },
+            {
+              "internalType": "bool",
+              "name": "_transferable",
+              "type": "bool"
+            },
+            {
+              "internalType": "bool",
+              "name": "_transferableToPublic",
+              "type": "bool"
+            },
+            {
+              "internalType": "bool",
+              "name": "_whitelistTokens",
+              "type": "bool"
+            },
+            {
+              "internalType": "string",
+              "name": "_name",
+              "type": "string"
+            },
+            {
+              "internalType": "string",
+              "name": "_symbol",
+              "type": "string"
+            }
+          ],
+          "internalType": "struct FunctionParameters.PortfolioCreationInitData",
+          "name": "initData",
+          "type": "tuple"
+        },
+        {
+          "internalType": "address[]",
+          "name": "_owners",
+          "type": "address[]"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_threshold",
+          "type": "uint256"
+        }
+      ],
+      "name": "createPortfolioCustodial",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "_assetManagerTreasury",
+              "type": "address"
+            },
+            {
+              "internalType": "address[]",
+              "name": "_whitelistedTokens",
+              "type": "address[]"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_managementFee",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_performanceFee",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_entryFee",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_exitFee",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_initialPortfolioAmount",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_minPortfolioTokenHoldingAmount",
+              "type": "uint256"
+            },
+            {
+              "internalType": "bool",
+              "name": "_public",
+              "type": "bool"
+            },
+            {
+              "internalType": "bool",
+              "name": "_transferable",
+              "type": "bool"
+            },
+            {
+              "internalType": "bool",
+              "name": "_transferableToPublic",
+              "type": "bool"
+            },
+            {
+              "internalType": "bool",
+              "name": "_whitelistTokens",
+              "type": "bool"
+            },
+            {
+              "internalType": "string",
+              "name": "_name",
+              "type": "string"
+            },
+            {
+              "internalType": "string",
+              "name": "_symbol",
+              "type": "string"
+            }
+          ],
+          "internalType": "struct FunctionParameters.PortfolioCreationInitData",
+          "name": "initData",
+          "type": "tuple"
+        }
+      ],
+      "name": "createPortfolioNonCustodial",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "portfoliofundId",
+          "type": "uint256"
+        }
+      ],
+      "name": "getPortfolioList",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "gnosisFallbackLibrary",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "gnosisMultisendLibrary",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "gnosisSafeProxyFactory",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "gnosisSingleton",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "_basePortfolioAddress",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "_baseTokenExclusionManagerAddress",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "_baseRebalancingAddres",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "_baseAssetManagementConfigAddress",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "_feeModuleImplementationAddress",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "_baseTokenRemovalVaultImplementation",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "_baseVelvetGnosisSafeModuleAddress",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "_gnosisSingleton",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "_gnosisFallbackLibrary",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "_gnosisMultisendLibrary",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "_gnosisSafeProxyFactory",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "_protocolConfig",
+              "type": "address"
+            }
+          ],
+          "internalType": "struct FunctionParameters.PortfolioFactoryInitData",
+          "name": "initData",
+          "type": "tuple"
+        }
+      ],
+      "name": "initialize",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "pendingOwner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "portfolioId",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "protocolConfig",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "proxiableUUID",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "renounceOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bool",
+          "name": "_state",
+          "type": "bool"
+        }
+      ],
+      "name": "setPortfolioCreationState",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_newImpl",
+          "type": "address"
+        }
+      ],
+      "name": "setTokenRemovalVaultModule",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "transferOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_accessController",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_account",
+          "type": "address"
+        }
+      ],
+      "name": "transferSuperAdminOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_newGnosisSingleton",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_newGnosisFallbackLibrary",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_newGnosisMultisendLibrary",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_newGnosisSafeProxyFactory",
+          "type": "address"
+        }
+      ],
+      "name": "updateGnosisAddresses",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address[]",
+          "name": "_proxy",
+          "type": "address[]"
+        },
+        {
+          "internalType": "address",
+          "name": "_newImpl",
+          "type": "address"
+        }
+      ],
+      "name": "upgradeAssetManagerConfig",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address[]",
+          "name": "_proxy",
+          "type": "address[]"
+        },
+        {
+          "internalType": "address",
+          "name": "_newImpl",
+          "type": "address"
+        }
+      ],
+      "name": "upgradeFeeModule",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address[]",
+          "name": "_proxy",
+          "type": "address[]"
+        },
+        {
+          "internalType": "address",
+          "name": "_newImpl",
+          "type": "address"
+        }
+      ],
+      "name": "upgradePortfolio",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address[]",
+          "name": "_proxy",
+          "type": "address[]"
+        },
+        {
+          "internalType": "address",
+          "name": "_newImpl",
+          "type": "address"
+        }
+      ],
+      "name": "upgradeRebalance",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newImplementation",
+          "type": "address"
+        }
+      ],
+      "name": "upgradeTo",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newImplementation",
+          "type": "address"
+        },
+        {
+          "internalType": "bytes",
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "name": "upgradeToAndCall",
+      "outputs": [],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address[]",
+          "name": "_proxy",
+          "type": "address[]"
+        },
+        {
+          "internalType": "address",
+          "name": "_newImpl",
+          "type": "address"
+        }
+      ],
+      "name": "upgradeTokenExclusionManager",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "whitelistedPortfolioAddress",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ]
