@@ -430,20 +430,27 @@ class SimpleExecutor:
             vault_address = current_state.get('vault_address', self.vault_address)
             balances = current_state.get('balances', {})
             
-            # Phase 1: Surgical Liquidation (only tokens that need removal)
-            if analysis['tokens_to_remove']:
-                print(f"\n🔴 Phase 1: Surgical liquidation of {len(analysis['tokens_to_remove'])} tokens")
+            # Phase 1: Surgical Liquidation (only tokens that need removal, excluding WBNB)
+            tokens_to_liquidate = [
+                token for token in analysis['tokens_to_remove'] 
+                if token.lower() != self.wbnb_address.lower()
+            ]
+            
+            if tokens_to_liquidate:
+                print(f"\n🔴 Phase 1: Surgical liquidation of {len(tokens_to_liquidate)} tokens")
+                if len(analysis['tokens_to_remove']) > len(tokens_to_liquidate):
+                    print(f"   ℹ️  Skipping WBNB liquidation (will use existing balance for purchases)")
                 
                 # Try batch liquidation first
                 liquidation_calldata = await self.get_enso_liquidation_calldata(
-                    analysis['tokens_to_remove'], balances, vault_address
+                    tokens_to_liquidate, balances, vault_address
                 )
                 
                 if liquidation_calldata:
                     try:
                         print("🔄 Attempting batch surgical liquidation...")
                         success = await self.execute_rebalancing_update_tokens(
-                            analysis['tokens_to_remove'],
+                            tokens_to_liquidate,
                             [self.wbnb_address] + analysis['unchanged_tokens'],  # Keep unchanged tokens
                             balances,
                             liquidation_calldata
@@ -452,7 +459,7 @@ class SimpleExecutor:
                         if not success:
                             print("⚠️  Batch surgical liquidation failed, trying individual...")
                             individual_results = await self.execute_individual_liquidation(
-                                analysis['tokens_to_remove'], balances, vault_address
+                                tokens_to_liquidate, balances, vault_address
                             )
                             
                             # Check if any liquidation succeeded
@@ -468,7 +475,7 @@ class SimpleExecutor:
                         print("🔄 Falling back to individual liquidation...")
                         
                         individual_results = await self.execute_individual_liquidation(
-                            analysis['tokens_to_remove'], balances, vault_address
+                            tokens_to_liquidate, balances, vault_address
                         )
                         
                         successful_liquidations = sum(1 for success in individual_results.values() if success)
@@ -478,6 +485,9 @@ class SimpleExecutor:
                 else:
                     print("❌ Failed to generate surgical liquidation calldata")
                     return False
+            elif analysis['tokens_to_remove']:
+                print(f"ℹ️  Only WBNB needs replacement - skipping liquidation phase")
+                print(f"   Will use existing WBNB balance to purchase new tokens")
                 
                 # Wait for liquidation to settle
                 print("⏳ Waiting for liquidation settlement...")
@@ -758,7 +768,7 @@ class SimpleExecutor:
     
     
     
-    async def execute_rebalancing(self, plan_file: str = None) -> bool:
+    async def execute_rebalancing(self, plan_file: str = None, optimizer = None) -> bool:
         """Execute complete rebalancing: Current → WBNB → Target"""
         print("🚀 Starting Three-Phase Rebalancing")
         print("=" * 50)
@@ -792,8 +802,14 @@ class SimpleExecutor:
         from reward_coordinator import RewardCoordinator
         reward_coordinator = RewardCoordinator(self.vault_address, self.owner, self.w3)
         
+        # Get cached token data from optimizer to avoid duplicate API calls
+        cached_token_data = None
+        if optimizer and hasattr(optimizer, '_token_cache'):
+            cached_token_data = optimizer._token_cache
+            print("💾 Using cached token data from optimizer for reward coordination")
+        
         # Redeem rewards from all protocols
-        rewards_success = await reward_coordinator.redeem_all_rewards(current_tokens)
+        rewards_success = await reward_coordinator.redeem_all_rewards(current_tokens, cached_token_data)
         if not rewards_success:
             print("⚠️ Reward redemption had issues, but continuing with rebalancing...")
         

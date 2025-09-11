@@ -116,8 +116,8 @@ class YieldScheduler:
         try:
             self.log_message("🚀 Executing rebalancing...")
             
-            # Execute rebalancing
-            success = await self.executor.execute_rebalancing()
+            # Execute rebalancing (pass optimizer for cached data)
+            success = await self.executor.execute_rebalancing(optimizer=self.optimizer)
             
             if success:
                 self.log_message("✅ Rebalancing completed successfully!")

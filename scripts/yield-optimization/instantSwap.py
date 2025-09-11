@@ -19,7 +19,7 @@ from core.executor import SimpleExecutor
 # ============================================
 
 # Token addresses (leave blank to fill in)
-TOKEN_IN = "0x7608eB2fc533343556e443511a2747F605E49C9B"   # Input token address to sell
+TOKEN_IN = "0x50956c8e46a4f7Dfc7475e3957c162D29b39F75f"   # Input token address to sell
 TOKEN_OUT = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"  # Output token address to buy
 
 # Percentage to sell (1-100)

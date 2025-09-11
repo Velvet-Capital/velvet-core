@@ -7,24 +7,10 @@ from typing import Dict, List
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from adapters.api_adapter import APIAdapter, NON_YIELD_TOKENS, IGNORED_YIELD_TOKENS
 from adapters.pendle_adapter import PendleAdapter
 from core.portfolio_fetcher import SimplePortfolioFetcher
 
-# Token Classification Constants
-# Non-yield bearing tokens (stablecoins, base tokens) - get 0% APY
-NON_YIELD_TOKENS = {
-    "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",  # WBNB
-    "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",  # USDC
-    "0x55d398326f99059ff775485246999027b3197955",  # USDT
-    "0xe9e7cea3dedca5984780bafc599bd69add087d56",  # BUSD
-    "0x2170ed0880ac9a755fd29b2688956bd959f933f8",  # ETH
-}
-
-# Yield tokens to exclude from optimization selection (manual blacklist)
-IGNORED_YIELD_TOKENS = {
-    # Add token addresses you want to exclude from optimization
-    # Example: "0x1234567890123456789012345678901234567890",
-}
 
 class SimpleOptimizer:
     """Simple cross-protocol optimizer - keep it minimal and effective"""
@@ -34,123 +20,209 @@ class SimpleOptimizer:
         self.allocation_weights = [0.40, 0.30, 0.20, 0.10] 
         self.portfolio_fetcher = SimplePortfolioFetcher(vault_address)
         
-        # Initialize adapters (start with Pendle, add more later)
+        # Initialize adapters (now using unified API adapter)
         self.adapters = [
-            PendleAdapter(chain_id=56)
+            APIAdapter(chain_id=56, protocols=["pendle", "pendle-yt", "pendle-sy", "pendle-pt", "euler"], token_search="BNB", min_apy=0.04),
+            # PendleAdapter(chain_id=56),
         ]
+        
+        # Add caching to eliminate double API calls
+        self._token_cache = None
+        self._cache_timestamp = None
     
-    async def get_all_tokens(self) -> List[Dict]:
-        """Get tokens from all adapters with price impact filtering"""
+    async def get_all_tokens(self, use_cache: bool = True) -> List[Dict]:
+        """Get tokens from all adapters with smart deduplication and optimization"""
+        import time
+        
+        # Check cache first (5 minutes cache lifetime)
+        if use_cache and self._token_cache is not None and self._cache_timestamp is not None:
+            cache_age = time.time() - self._cache_timestamp
+            if cache_age < 300:  # 5 minutes
+                print(f"🔍 get_all_tokens() using cached data (age: {cache_age:.1f}s)")
+                return self._token_cache
+        
+        print("🔍 get_all_tokens() fetching fresh data...")
         all_tokens = []
         
-        for adapter in self.adapters:
+        print(f"📡 Processing {len(self.adapters)} adapter(s)...")
+        for i, adapter in enumerate(self.adapters):
             try:
+                print(f"   📊 Adapter {i+1}: {adapter.get_protocol_name()} - getting tokens with impact...")
                 # Get tokens with price impact check
                 tokens = await adapter.get_tokens_with_impact()
                 all_tokens.extend(tokens)
+                print(f"   ✅ Adapter {i+1} returned {len(tokens)} tokens")
             except Exception as e:
-                print(f"Warning: Adapter {adapter.protocol_name} failed: {e}")
+                print(f"   ❌ Adapter {adapter.get_protocol_name()} failed: {e}")
                 continue
         
-        # Filter out manually ignored yield tokens
-        if IGNORED_YIELD_TOKENS:
-            initial_count = len(all_tokens)
-            filtered_tokens = [
-                token for token in all_tokens 
-                if token['address'].lower() not in IGNORED_YIELD_TOKENS
-            ]
-            
-            if len(filtered_tokens) < initial_count:
-                ignored_count = initial_count - len(filtered_tokens)
-                print(f"🚫 Filtered out {ignored_count} ignored yield tokens")
-            
-            return filtered_tokens
+        print(f"📊 Step 1: Collected {len(all_tokens)} raw tokens from all adapters")
         
-        return all_tokens
+        # Smart deduplication - keep highest APY version of each token address
+        print("🔄 Step 2: Deduplicating tokens by address (keeping highest APY)...")
+        deduplicated_map = {}
+        duplicate_count = 0
+        
+        for token in all_tokens:
+            addr = token['address'].lower()
+            if addr in deduplicated_map:
+                duplicate_count += 1
+                # Keep token with higher APY
+                if token['apy'] > deduplicated_map[addr]['apy']:
+                    print(f"   🔄 Better APY found for {token.get('symbol', addr[:10])}...: {deduplicated_map[addr]['apy']:.2%} → {token['apy']:.2%}")
+                    deduplicated_map[addr] = token
+            else:
+                deduplicated_map[addr] = token
+        
+        deduplicated_tokens = list(deduplicated_map.values())
+        print(f"   📊 Removed {duplicate_count} duplicates: {len(all_tokens)} → {len(deduplicated_tokens)} unique tokens")
+        
+        # Sort by APY for better logging
+        deduplicated_tokens.sort(key=lambda x: x['apy'], reverse=True)
+        
+        # Log top tokens for verification
+        print("🔍 Step 3: Top tokens after deduplication:")
+        for i, token in enumerate(deduplicated_tokens[:8]):  # Show top 8
+            protocol = token.get('protocol', 'unknown')
+            print(f"   {i+1}. {token.get('symbol', 'Unknown')}: {token['apy']:.2%} APY ({protocol})")
+        
+        print(f"✅ Final result: {len(deduplicated_tokens)} optimized unique tokens ready for selection")
+        
+        # Cache the results to avoid double API calls
+        import time
+        self._token_cache = deduplicated_tokens
+        self._cache_timestamp = time.time()
+        print(f"💾 Token data cached for future use")
+        
+        return deduplicated_tokens
     
-    async def calculate_current_portfolio_apy(self, current_state: Dict) -> float:
+    async def get_current_portfolio_top4_apys(self, current_state: Dict) -> List[float]:
         """
-        Calculate the current portfolio's weighted average APY using adapters.
-        Returns the actual current APY for accurate profitability comparison.
+        Get current portfolio's top 4 token APYs sorted by performance (highest first).
+        Returns list of 4 APY values for position-by-position comparison.
         """
+        print("🔍 get_current_portfolio_top4_apys() starting...")
+        
         try:
             current_tokens = current_state.get('current_tokens', [])
-            balances = current_state.get('balances', {})
+            print(f"📊 Current portfolio has {len(current_tokens)} tokens")
             
-            if not current_tokens or not balances:
-                print(f"⚠️  No current tokens ({len(current_tokens)}) or balances ({len(balances)}) found, using default 5% APY")
-                return 0.05
+            if not current_tokens:
+                print("⚠️  No current tokens found, returning [0%, 0%, 0%, 0%]")
+                return [0.0, 0.0, 0.0, 0.0]
             
-            # Get all available tokens with APY data from adapters
-            all_adapter_tokens = []
-            for adapter in self.adapters:
-                try:
-                    adapter_tokens = await adapter.get_tokens()
-                    all_adapter_tokens.extend(adapter_tokens)
-                except Exception as e:
-                    print(f"Warning: Adapter {adapter.get_protocol_name()} failed in APY calculation: {e}")
-                    continue
+            # Get all available tokens with enhanced deduplication (use cache to avoid double API calls)
+            print(f"🔍 Getting APY data using cached token collection...")
+            try:
+                all_adapter_tokens = await self.get_all_tokens(use_cache=True)
+                print(f"   ✅ Token collection returned {len(all_adapter_tokens)} deduplicated tokens")
+            except Exception as e:
+                print(f"   ❌ Enhanced token collection failed: {e}")
+                print("   🔄 Falling back to direct adapter calls...")
+                # Fallback to old method if enhanced fails
+                all_adapter_tokens = []
+                for i, adapter in enumerate(self.adapters):
+                    try:
+                        print(f"   📡 Fallback: Calling adapter {i+1}/{len(self.adapters)}: {adapter.get_protocol_name()}")
+                        adapter_tokens = await adapter.get_tokens()
+                        all_adapter_tokens.extend(adapter_tokens)
+                        print(f"   ✅ Fallback: Adapter {i+1} returned {len(adapter_tokens)} tokens")
+                    except Exception as e:
+                        print(f"   ❌ Adapter {adapter.get_protocol_name()} failed in APY lookup: {e}")
+                        continue
             
             # Create APY lookup map
             token_apy_map = {}
             for token in all_adapter_tokens:
                 token_apy_map[token['address'].lower()] = token['apy']
             
-            # Calculate weighted APY
-            total_weighted_apy = 0
-            total_balance_value = 0
-            found_apys = 0
+            # Get APY for each current token
+            current_token_apys = []
             
             for token_address in current_tokens:
-                token_balance = balances.get(token_address, 0)
-                if token_balance > 0:
-                    # Look up APY for this token
-                    token_apy = token_apy_map.get(token_address.lower(), None)
-                    
-                    if token_apy is not None:
-                        # Weight by balance (simple approach - assume all tokens have similar price)
-                        total_weighted_apy += token_apy * token_balance
-                        total_balance_value += token_balance
-                        found_apys += 1
-                        print(f"   📊 {token_address[:10]}...: {token_apy:.2%} APY")
+                # Look up APY for this token
+                token_apy = token_apy_map.get(token_address.lower(), None)
+                
+                if token_apy is not None:
+                    current_token_apys.append({
+                        'address': token_address,
+                        'apy': token_apy
+                    })
+                    print(f"   📊 {token_address[:10]}...: {token_apy:.2%} APY")
+                else:
+                    # Check if it's a known non-yield token
+                    if token_address.lower() in NON_YIELD_TOKENS:
+                        current_token_apys.append({
+                            'address': token_address,
+                            'apy': 0.0
+                        })
+                        print(f"   📊 {token_address[:10]}... (Non-yield): 0.00% APY")
                     else:
-                        # Token not found in adapters - check if it's a known non-yield token
-                        if token_address.lower() in NON_YIELD_TOKENS:
-                            # Non-yield bearing token (stablecoin/base token)
-                            total_weighted_apy += 0 * token_balance
-                            total_balance_value += token_balance
-                            print(f"   📊 {token_address[:10]}... (Non-yield): 0.00% APY")
-                        else:
-                            # Unknown token - conservative 0% APY
-                            total_balance_value += token_balance
-                            print(f"   ⚠️  {token_address[:10]}...: Unknown, using 0.00% APY")
+                        # Unknown token - conservative 0% APY
+                        current_token_apys.append({
+                            'address': token_address,
+                            'apy': 0.0
+                        })
+                        print(f"   ⚠️  {token_address[:10]}...: Unknown, using 0.00% APY")
             
-            if total_balance_value > 0:
-                current_portfolio_apy = total_weighted_apy / total_balance_value
-                print(f"💰 Current portfolio APY: {current_portfolio_apy:.2%} (based on {found_apys} tokens)")
-                return current_portfolio_apy
-            else:
-                print("⚠️  No token balances found, using default 5% APY")
-                return 0.05
+            # Sort by APY (highest first) and take top 4
+            current_token_apys.sort(key=lambda x: x['apy'], reverse=True)
+            top4_apys = [token['apy'] for token in current_token_apys[:4]]
+            
+            # Pad with 0% if fewer than 4 tokens
+            while len(top4_apys) < 4:
+                top4_apys.append(0.0)
+            
+            print(f"💰 Current portfolio top 4 APYs: {[f'{apy:.2%}' for apy in top4_apys]}")
+            return top4_apys
                 
         except Exception as e:
-            print(f"❌ Error calculating current portfolio APY: {e}")
-            print("⚠️  Using default 5% APY as fallback")
-            return 0.05
+            print(f"❌ Error getting current portfolio APYs: {e}")
+            print("⚠️  Using fallback [0%, 0%, 0%, 0%]")
+            return [0.0, 0.0, 0.0, 0.0]
     
     async def calculate_rebalancing_profitability(self, current_state: Dict, target_allocation: List[Dict], total_expected_apy: float) -> bool:
         """
-        Calculate if rebalancing is profitable after considering gas costs and APY improvement.
+        Calculate if rebalancing is profitable using position-by-position APY comparison.
         Returns True if rebalancing is recommended, False otherwise.
         """
         try:
-            # Calculate actual current portfolio APY
-            current_apy = await self.calculate_current_portfolio_apy(current_state)
+            # Get current portfolio's top 4 APYs (sorted highest to lowest)
+            current_top4_apys = await self.get_current_portfolio_top4_apys(current_state)
+            
+            # Get target portfolio's 4 APYs (already sorted by selection process)
+            target_top4_apys = [alloc['apy'] for alloc in target_allocation[:4]]
+            
+            # Pad target APYs if fewer than 4
+            while len(target_top4_apys) < 4:
+                target_top4_apys.append(0.0)
+            
+            print(f"🔍 Position-by-position APY comparison:")
+            print(f"   Current: {[f'{apy:.2%}' for apy in current_top4_apys]}")
+            print(f"   Target:  {[f'{apy:.2%}' for apy in target_top4_apys]}")
+            
+            # Compare position by position and sum positive improvements
+            total_improvement = 0.0
+            position_improvements = []
+            
+            for i in range(4):
+                improvement = target_top4_apys[i] - current_top4_apys[i]
+                position_improvements.append(improvement)
+                
+                # Only count positive improvements toward threshold
+                if improvement > 0:
+                    total_improvement += improvement
+                    print(f"   Position {i+1}: +{improvement:.2%} improvement")
+                elif improvement == 0:
+                    print(f"   Position {i+1}: No change (same APY)")
+                else:
+                    print(f"   Position {i+1}: {improvement:.2%} (target lower, no contribution)")
+            
+            print(f"🎯 Total APY improvement: {total_improvement:.2%}")
             
             # APY improvement threshold - must improve by at least 1.5%
-            apy_improvement = total_expected_apy - current_apy
-            if apy_improvement < 0.015:  # Less than 1.5% improvement
-                print(f"🔍 APY improvement ({apy_improvement:.2%}) below 1.5% threshold")
+            if total_improvement < 0.015:  # Less than 1.5% improvement
+                print(f"🔍 Total improvement ({total_improvement:.2%}) below 1.5% threshold")
                 return False
             
             # Get portfolio value for gas cost analysis
@@ -164,7 +236,7 @@ class SimpleOptimizer:
             estimated_gas_cost_usd = 10.0  # Conservative estimate in USD
             
             # Calculate expected daily profit from APY improvement
-            expected_daily_profit = (portfolio_value * apy_improvement) / 365
+            expected_daily_profit = (portfolio_value * total_improvement) / 365
             
             # Profitability check - daily profit should exceed 2x gas cost for safety margin
             profit_threshold = estimated_gas_cost_usd * 2  # 2x safety margin
@@ -174,11 +246,11 @@ class SimpleOptimizer:
                 print(f"   Expected daily profit: ${expected_daily_profit:.2f}")
                 print(f"   Required threshold: ${profit_threshold:.2f}")
                 print(f"   Portfolio value: ${portfolio_value:.2f}")
-                print(f"   APY improvement: {apy_improvement:.2%}")
+                print(f"   Total APY improvement: {total_improvement:.2%}")
                 return False
             
             print(f"✅ Rebalancing profitable:")
-            print(f"   APY improvement: {apy_improvement:.2%}")
+            print(f"   Total APY improvement: {total_improvement:.2%}")
             print(f"   Expected daily profit: ${expected_daily_profit:.2f}")
             print(f"   Gas cost estimate: ${estimated_gas_cost_usd:.2f}")
             
@@ -190,21 +262,38 @@ class SimpleOptimizer:
     
     async def get_optimal_allocation(self) -> Dict:
         """Get optimal allocation - simple and direct"""
+        print("🎯 get_optimal_allocation() starting...")
         
         # Get current portfolio state
+        print("📊 Step 1: Getting current portfolio state...")
         current_state = await self.portfolio_fetcher.get_portfolio_state()
+        print(f"   ✅ Portfolio state retrieved: {len(current_state.get('current_tokens', []))} tokens")
         
         # Get all available tokens with liquidity check
+        print("📡 Step 2: Getting all available tokens from adapters...")
         all_tokens = await self.get_all_tokens()
         
         if not all_tokens:
+            print("❌ No liquid tokens found!")
             raise Exception("No liquid tokens found")
         
-        # Sort by APY (highest first)
+        print(f"   ✅ Found {len(all_tokens)} liquid tokens")
+        
+        # Sort by APY (highest first) and select top 4 tokens
+        print("📊 Step 3: Sorting all tokens by APY and selecting top 4...")
         all_tokens.sort(key=lambda x: x['apy'], reverse=True)
         
-        # Take top 4 tokens for 40/30/20/10 allocation
+        # Take top 4 tokens for 40/30/20/10 allocation (regardless of current holdings)
         selected_tokens = all_tokens[:4]
+        
+        print("🎯 Selected top 4 tokens for target allocation:")
+        for i, token in enumerate(selected_tokens):
+            weight = self.allocation_weights[i] if i < len(self.allocation_weights) else 0.10
+            print(f"   {i+1}. {token.get('symbol', 'Unknown')}: {token['apy']:.2%} APY (weight: {weight:.0%})")
+        
+        # Store for optimization summary  
+        total_tokens_before_filter = len(all_tokens)
+        filtered_count = 0  # No filtering anymore
         
         # Build target allocation
         target_allocation = []
@@ -225,8 +314,12 @@ class SimpleOptimizer:
             total_expected_apy += token['apy'] * weight
         
         # Smart rebalancing decision with profitability analysis
+        print("🔍 Step 4: Analyzing rebalancing necessity...")
         current_tokens = set(current_state['current_tokens'])
         target_tokens = set(alloc['token_address'] for alloc in target_allocation)
+        
+        print(f"   Current tokens: {len(current_tokens)}")
+        print(f"   Target tokens: {len(target_tokens)}")
         
         # First check if tokens are different
         tokens_different = current_tokens != target_tokens
@@ -236,10 +329,11 @@ class SimpleOptimizer:
             needs_rebalancing = False
         else:
             # Check profitability if tokens need changing
-            print("🔍 Analyzing rebalancing profitability...")
+            print("🔍 Step 5: Running profitability analysis (this may take time)...")
             needs_rebalancing = await self.calculate_rebalancing_profitability(
                 current_state, target_allocation, total_expected_apy
             )
+            print(f"   ✅ Profitability analysis complete: needs_rebalancing = {needs_rebalancing}")
         
         # Generate simple rebalancing steps
         steps = []
@@ -276,8 +370,10 @@ class SimpleOptimizer:
             'rebalancing_steps': steps,
             'optimization_summary': {
                 'total_tokens_analyzed': len(all_tokens),
+                'total_tokens_from_adapters': total_tokens_before_filter,
                 'protocols_used': list(set(token['protocol'] for token in selected_tokens)),
-                'top_apy': selected_tokens[0]['apy'] if selected_tokens else 0
+                'top_apy': selected_tokens[0]['apy'] if selected_tokens else 0,
+                'deduplication_applied': True
             }
         }
     
