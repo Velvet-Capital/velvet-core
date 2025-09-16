@@ -1,11 +1,10 @@
-import "@nomiclabs/hardhat-etherscan";
+import "@nomicfoundation/hardhat-verify";
 import "hardhat-gas-reporter";
 import "@nomiclabs/hardhat-ethers";
 import "@typechain/hardhat";
 import "@openzeppelin/hardhat-upgrades";
 import "hardhat-contract-sizer";
 import "solidity-coverage";
-import "hardhat-tracer";
 
 import "hardhat-gas-reporter";
 import "hardhat-abi-exporter";
@@ -181,6 +180,10 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
+    enabled: true,
+  },
+  sourcify: {
+    enabled: false,
   },
   abiExporter: {
     path: "./abi",
