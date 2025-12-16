@@ -6,6 +6,7 @@ interface IWithdrawBatch {
     address _target,
     address _tokenToWithdraw,
     address user,
+    uint256 _expectedOutputAmount,
     bytes[] memory _callData
   ) external;
 }

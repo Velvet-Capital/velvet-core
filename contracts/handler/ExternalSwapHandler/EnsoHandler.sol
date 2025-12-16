@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.17;
 
-import { SafeERC20Upgradeable, IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable-4.9.6/token/ERC20/utils/SafeERC20Upgradeable.sol";
-import { TransferHelper } from "@uniswap/lib/contracts/libraries/TransferHelper.sol";
-import { ErrorLibrary } from "../../library/ErrorLibrary.sol";
-import { IIntentHandler } from "../IIntentHandler.sol";
+import {SafeERC20Upgradeable, IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable-4.9.6/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import {TransferHelper} from "@uniswap/lib/contracts/libraries/TransferHelper.sol";
+import {ErrorLibrary} from "../../library/ErrorLibrary.sol";
+import {IIntentHandler} from "../IIntentHandler.sol";
 
 /**
  * @title EnsoHandler
@@ -17,7 +17,11 @@ import { IIntentHandler } from "../IIntentHandler.sol";
  */
 contract EnsoHandler is IIntentHandler {
   // The address of Enso's swap execution logic; swaps are delegated to this target.
-  address constant SWAP_TARGET = 0x38147794FF247e5Fc179eDbAE6C37fff88f68C52;
+  address public SWAP_TARGET;
+
+  constructor(address _swapTarget){
+    SWAP_TARGET = _swapTarget;
+  }
 
   /**
    * @notice Conducts a token swap operation via the Enso platform and transfers the output tokens
